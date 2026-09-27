@@ -210,6 +210,115 @@
     };
   }
 
+  // --- Mix a vial ----------------------------------------------------------
+
+  function rowNote(status, waterMl, units, check, vialMg, doseMg, syringe) {
+    const at = `At ${formatWaterMl(waterMl)}, your dose is ${formatUnits(units)}`;
+    if (status === "wont-fit") return `${at}, more than a ${SYRINGES[syringe].label} syringe holds.`;
+    if (status === "hard-to-measure") {
+      return `${at}. Misreading by one mark would change it by ${oneMarkPercent(units, syringe)}%.`;
+    }
+    if (status === "between-marks") {
+      const doseAtMarkMg = snap((check.nearestMark * vialMg) / (100 * waterMl));
+      const off = formatPercentOff((doseAtMarkMg - doseMg) / doseMg);
+      return `${at}, between marks. The nearest mark, ${formatUnits(check.nearestMark)}, gives ${formatMg(doseAtMarkMg)} (${off}).`;
+    }
+    return null;
+  }
+
+  function evaluateWater(vialMg, doseMg, waterMl, syringe) {
+    const units = unitsFor(vialMg, doseMg, waterMl);
+    const unitsPerMg = snap((100 * waterMl) / vialMg);
+    const check = assess(units, syringe);
+    let status = "ok";
+    if (!check.fits) status = "wont-fit";
+    else if (!check.measurable) status = "hard-to-measure";
+    else if (!check.onMark) status = "between-marks";
+    return {
+      waterMl,
+      concentration: snap(vialMg / waterMl),
+      units,
+      unitsPerMg,
+      status,
+      easyMath: EASY_UNITS_PER_MG.some((easy) => Math.abs(easy - unitsPerMg) <= EPS),
+      note: rowNote(status, waterMl, units, check, vialMg, doseMg, syringe),
+    };
+  }
+
+  function recommendWater(vialMg, doseMg, syringe) {
+    const qualifying = [];
+    for (let tenths = MIN_WATER_TENTHS; tenths <= MAX_WATER_TENTHS; tenths++) {
+      const option = evaluateWater(vialMg, doseMg, tenths / 10, syringe);
+      if (option.status === "ok") qualifying.push(option);
+    }
+    const easy = qualifying.filter((option) => option.easyMath);
+    const pick = (easy.length ? easy : qualifying)[0];
+    return pick ? pick.waterMl : null;
+  }
+
+  function noRecommendationMessage(doseMg, syringe, alternative) {
+    if (!alternative) return "No amount from 1 to 3 mL makes this dose easy to measure with any syringe.";
+    return (
+      `No amount from 1 to 3 mL makes a ${formatMg(doseMg)} dose easy to measure with a ${SYRINGES[syringe].label} syringe. ` +
+      `${capitalize(syringePhrase([alternative.syringe]))} works with ${formatWaterMl(alternative.waterMl)} of water.`
+    );
+  }
+
+  function waterOptions({ vialMg, doseMg, syringe }) {
+    const errors = checkInputs({ vialMg, doseMg }, ["vialMg", "doseMg"]);
+    if (errors.length) {
+      return { rows: [], recommendedMl: null, alternative: null, dosesInVial: 0, leftoverMg: 0, errors, warnings: [] };
+    }
+
+    const recommendedMl = recommendWater(vialMg, doseMg, syringe);
+    const amounts = [...TABLE_WATER_ML];
+    if (recommendedMl !== null && !amounts.includes(recommendedMl)) amounts.push(recommendedMl);
+    amounts.sort((a, b) => a - b);
+    const rows = amounts.map((waterMl) => ({
+      ...evaluateWater(vialMg, doseMg, waterMl, syringe),
+      recommended: waterMl === recommendedMl,
+    }));
+
+    const warnings = [];
+    let alternative = null;
+    if (recommendedMl === null) {
+      for (const key of SYRINGE_ORDER) {
+        if (key === syringe) continue;
+        const waterMl = recommendWater(vialMg, doseMg, key);
+        if (waterMl !== null) {
+          alternative = { syringe: key, waterMl };
+          break;
+        }
+      }
+      warnings.push({ code: "no-recommendation", message: noRecommendationMessage(doseMg, syringe, alternative) });
+    }
+
+    const doses = dosesInVial(vialMg, doseMg);
+    return {
+      rows,
+      recommendedMl,
+      alternative,
+      dosesInVial: doses.count,
+      leftoverMg: doses.leftoverMg,
+      errors,
+      warnings,
+    };
+  }
+
+  function measureWater(waterMl, syringe) {
+    const { capacityMl } = SYRINGES[syringe];
+    const fullSyringes = Math.floor(waterMl / capacityMl + EPS);
+    const remainder = snap((waterMl - fullSyringes * capacityMl) * 100);
+    return { fullSyringes, remainderUnits: remainder > EPS ? remainder : 0 };
+  }
+
+  function describeWaterMeasure(waterMl, syringe) {
+    const { fullSyringes, remainderUnits } = measureWater(waterMl, syringe);
+    if (fullSyringes === 0) return `Draw to ${formatUnits(remainderUnits)}`;
+    const full = `${fullSyringes} full ${fullSyringes === 1 ? "syringe" : "syringes"}`;
+    return remainderUnits > 0 ? `${full} + ${formatUnits(remainderUnits)}` : full;
+  }
+
   const api = {
     SYRINGES,
     SYRINGE_ORDER,
@@ -222,6 +331,9 @@
     formatPercentOff,
     formatDoses,
     drawForDose,
+    waterOptions,
+    measureWater,
+    describeWaterMeasure,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

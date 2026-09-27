@@ -212,3 +212,124 @@ test("drawForDose: tiny doses rounding to mark 0 get no nearest-mark line", () =
   assert.equal(result.nearestMarkText, null);
   assert.deepEqual(codes(warnings), ["hard-to-measure"]);
 });
+
+// --- measuring water and the options table -----------------------
+
+test("measureWater counts full syringes and the remainder", () => {
+  assert.deepEqual(Calc.measureWater(1, "1"), { fullSyringes: 1, remainderUnits: 0 });
+  assert.deepEqual(Calc.measureWater(2.4, "1"), { fullSyringes: 2, remainderUnits: 40 });
+  assert.deepEqual(Calc.measureWater(1, "0.3"), { fullSyringes: 3, remainderUnits: 10 });
+  assert.deepEqual(Calc.measureWater(1.2, "0.3"), { fullSyringes: 4, remainderUnits: 0 });
+  assert.deepEqual(Calc.measureWater(3, "0.3"), { fullSyringes: 10, remainderUnits: 0 });
+  assert.deepEqual(Calc.measureWater(1.5, "0.5"), { fullSyringes: 3, remainderUnits: 0 });
+});
+
+test("describeWaterMeasure words the measurement", () => {
+  assert.equal(Calc.describeWaterMeasure(1, "1"), "1 full syringe");
+  assert.equal(Calc.describeWaterMeasure(3, "1"), "3 full syringes");
+  assert.equal(Calc.describeWaterMeasure(1.5, "1"), "1 full syringe + 50 units");
+  assert.equal(Calc.describeWaterMeasure(2.4, "1"), "2 full syringes + 40 units");
+  assert.equal(Calc.describeWaterMeasure(0.8, "1"), "Draw to 80 units");
+});
+
+test("waterOptions: 10 mg vial, 2 mg dose, 1 mL syringe recommends 1.0 mL", () => {
+  const res = options(10, 2);
+  assert.deepEqual(res.errors, []);
+  assert.deepEqual(res.warnings, []);
+  assert.equal(res.recommendedMl, 1);
+  assert.deepEqual(res.rows.map((r) => r.waterMl), [1, 1.5, 2, 2.5, 3]);
+  assert.deepEqual(res.rows.map((r) => r.units), [20, 30, 40, 50, 60]);
+  assert.deepEqual(res.rows.map((r) => r.recommended), [true, false, false, false, false]);
+  const first = res.rows[0];
+  assert.equal(first.concentration, 10);
+  assert.equal(first.unitsPerMg, 10);
+  assert.equal(first.status, "ok");
+  assert.equal(first.easyMath, true);
+  assert.equal(first.note, null);
+  assert.equal(res.dosesInVial, 5);
+  assert.equal(res.leftoverMg, 0);
+});
+
+test("waterOptions: a recommendation between half-mL steps gets its own row", () => {
+  const res = options(12, 2.5);
+  assert.equal(res.recommendedMl, 2.4);
+  assert.deepEqual(res.rows.map((r) => r.waterMl), [1, 1.5, 2, 2.4, 2.5, 3]);
+  const recommended = res.rows.find((r) => r.recommended);
+  assert.equal(recommended.units, 50);
+  assert.equal(recommended.unitsPerMg, 20);
+  assert.equal(res.dosesInVial, 4);
+  assert.equal(res.leftoverMg, 2);
+});
+
+test("waterOptions: 12 mg vial, 2.5 mg dose, 0.5 mL syringe recommends 1.2 mL", () => {
+  assert.equal(options(12, 2.5, "0.5").recommendedMl, 1.2);
+});
+
+test("waterOptions: prefers easy math over less water", () => {
+  // 1.2 mL qualifies (30 units) but 1 mg = 15 units; 1.6 mL gives 1 mg = 20 units.
+  assert.equal(options(8, 2).recommendedMl, 1.6);
+});
+
+test("waterOptions: falls back to the smallest qualifying amount without easy math", () => {
+  const res = options(7, 2.35);
+  assert.equal(res.recommendedMl, 2.8);
+  const recommended = res.rows.find((r) => r.recommended);
+  assert.equal(recommended.units, 94);
+  assert.equal(recommended.easyMath, false);
+});
+
+test("waterOptions: row statuses and notes", () => {
+  const small = options(10, 2, "0.3");
+  assert.deepEqual(small.rows.map((r) => r.status), ["ok", "ok", "wont-fit", "wont-fit", "wont-fit"]);
+  assert.equal(small.rows[2].note, "At 2.0 mL, your dose is 40 units, more than a 0.3 mL syringe holds.");
+
+  const between = options(12, 2.5);
+  assert.equal(between.rows[0].status, "between-marks");
+  assert.equal(
+    between.rows[0].note,
+    "At 1.0 mL, your dose is 20.8 units, between marks. The nearest mark, 20 units, gives 2.4 mg (4% under).",
+  );
+
+  const tiny = options(30, 1);
+  assert.equal(tiny.rows[0].status, "hard-to-measure");
+  assert.equal(tiny.rows[0].note, "At 1.0 mL, your dose is 3.3 units. Misreading by one mark would change it by 60%.");
+});
+
+test("waterOptions: no recommendation suggests another syringe", () => {
+  const res = options(30, 1);
+  assert.equal(res.recommendedMl, null);
+  assert.equal(res.rows.some((r) => r.recommended), false);
+  assert.deepEqual(res.alternative, { syringe: "0.3", waterMl: 3 });
+  assert.deepEqual(codes(res.warnings), ["no-recommendation"]);
+  assert.equal(
+    res.warnings[0].message,
+    "No amount from 1 to 3 mL makes a 1 mg dose easy to measure with a 1 mL syringe. A 0.3 mL syringe works with 3.0 mL of water.",
+  );
+});
+
+test("waterOptions: no syringe works", () => {
+  const res = options(30, 0.25);
+  assert.equal(res.alternative, null);
+  assert.equal(res.warnings[0].message, "No amount from 1 to 3 mL makes this dose easy to measure with any syringe.");
+});
+
+test("waterOptions reports missing inputs and a dose bigger than the vial", () => {
+  const missing = Calc.waterOptions({ vialMg: null, doseMg: 2, syringe: "1" });
+  assert.deepEqual(codes(missing.errors), ["missing-vial"]);
+  assert.deepEqual(missing.rows, []);
+  const tooBig = options(10, 12);
+  assert.deepEqual(codes(tooBig.errors), ["dose-exceeds-vial"]);
+  assert.deepEqual(tooBig.rows, []);
+});
+
+test("waterOptions survives extreme inputs", () => {
+  const huge = options(100000, 0.001);
+  assert.equal(huge.rows.length, 5);
+  assert.equal(huge.recommendedMl, null);
+  assert.equal(Calc.formatUnits(huge.rows[0].units), "less than 0.1 units");
+  // A whole 0.5 mg vial as one dose: 1.0 mL is exactly 100 units, the most a 1 mL syringe holds.
+  const whole = options(0.5, 0.5);
+  assert.equal(whole.dosesInVial, 1);
+  assert.equal(whole.recommendedMl, 1);
+  assert.deepEqual(whole.rows.map((r) => r.status), ["ok", "wont-fit", "wont-fit", "wont-fit", "wont-fit"]);
+});
