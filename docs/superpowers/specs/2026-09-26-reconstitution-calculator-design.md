@@ -80,11 +80,10 @@ Inputs: vial amount (mg), your dose (mg), syringe.
 ### Options table
 
 Rows always shown: water of 1.0, 1.5, 2.0, 2.5 and 3.0 mL. Each row shows:
-- Water (mL, one decimal)
-- Strength (mg/mL)
-- Your dose (units)
+- Water (mL, one decimal), with a status under it: ★ Recommended, Between marks, Hard to measure or Won't fit
+- Strength (mg/mL). Hidden at widths of 480px and below, where the answer shows it instead.
+- Dose (units)
 - `1 mg = N units`
-- A status: ★ recommended, "between marks", "hard to measure" or "won't fit"
 
 ### Recommended amount
 
@@ -106,7 +105,9 @@ Each row shows at most one problem status, in this order of priority: "won't fit
 
 For the selected row:
 - **Add X mL of bacteriostatic water**, shown large.
-- How to measure it with the chosen syringe: `full = floor(W / capacityMl)` plus the remaining units. The wording is "1 full syringe", "3 full syringes", "1 full syringe + 50 units" or "2 full syringes + 40 units". Water is at least 1.0 mL and no syringe holds more than 1 mL, so there is always at least one full syringe. Water comes in 0.1 mL steps, so the remainder is a multiple of 10 units and always sits on a mark.
+- The strength it makes, for your vial label: "Makes 5 mg/mL."
+- If the selected row has a problem, its note, such as "At 2.0 mL, your dose is 40 units, more than a 0.3 mL syringe holds."
+- "Measure:" followed by how to measure the water with the chosen syringe: `full = floor(W / capacityMl)` plus the remaining units. The wording is "1 full syringe", "3 full syringes", "1 full syringe + 50 units" or "2 full syringes + 40 units". Water is at least 1.0 mL and no syringe holds more than 1 mL, so there is always at least one full syringe. Water comes in 0.1 mL steps, so the remainder is a multiple of 10 units and always sits on a mark.
 - Your dose: N units, and doses in the vial.
 
 ### Errors
@@ -123,15 +124,15 @@ Output:
 - Concentration and doses in the vial.
 - If the dose isn't on a mark: "Nearest mark: 40 units = 2 mg (3% over)." Example: 10 mg vial, 2 mL water, 1.95 mg dose is 39 units, and a 1 mL syringe has no 39 mark. Halfway cases round up to the higher mark.
 - The worked math, three lines, for example:
-  - `10 mg ÷ 2 mL = 5 mg/mL`
+  - `10 mg ÷ 2.0 mL = 5 mg/mL`
   - `2 mg ÷ 5 mg/mL = 0.40 mL`
   - `0.40 mL × 100 = 40 units`
 
 Warnings and errors:
 - **Error, dose bigger than vial:** as in Tab 1.
-- **Error, won't fit:** "40 units won't fit in a 0.3 mL (30-unit) syringe. Use a bigger syringe or split it into two draws."
-- **Warning, hard to measure:** "Each mark on this syringe is 2 units, so misreading by one mark changes this dose by 11%. A 0.3 or 0.5 mL syringe reads more finely." Shown when the dose isn't measurable. Only suggests syringes it's measurable on.
-- **Warning, between marks:** shown when the nearest mark is more than 5% off the dose.
+- **Error, won't fit:** "40 units won't fit in a 0.3 mL (30-unit) syringe. Use a 0.5 mL or 1 mL syringe, or split it into 2 draws." It names only bigger syringes the dose fits in. If there are none: "Split it into 2 draws." The number of draws is rounded up.
+- **Warning, hard to measure:** "Each mark on this syringe is 2 units, so misreading by one mark changes this dose by 11%. A 0.3 mL or 0.5 mL syringe reads more finely." Shown when the dose isn't measurable. It only suggests syringes the dose is measurable on and fits in. If there are none: "Mixing your next vial with more water makes each dose bigger and easier to measure."
+- **No separate between-marks warning.** A measurable dose can never be more than 5% from its nearest mark: at most half a mark off, on at least 10 marks. So the 5% warning planned earlier could never appear. The "Nearest mark" line covers it. That line is hidden when the nearest mark is 0.
 - Missing or invalid input: same as Tab 1.
 
 ## Shared behaviour
@@ -145,9 +146,9 @@ Warnings and errors:
 ## Number formatting
 
 - Every number shows its unit, and decimals always have a leading zero.
-- Water amounts: 1 decimal (`1.0 mL`, `2.4 mL`).
-- Draw volume: 2 decimals (`0.40 mL`).
-- Units: up to 1 decimal, trailing `.0` removed (`40 units`, `22.5 units`).
+- Water amounts: at least 1 decimal, up to 2, so a typed 1.25 mL isn't shown rounded (`1.0 mL`, `2.4 mL`, `1.25 mL`).
+- Draw volume: 2 decimals, or 3 when needed, so it always agrees with the units (`0.40 mL`, `0.395 mL`).
+- Units: up to 1 decimal, trailing `.0` removed (`40 units`, `22.5 units`, `1 unit`). A dose that would round to 0 shows as `less than 0.1 units`.
 - Concentration: up to 2 decimals, trailing zeros removed (`5 mg/mL`, `6.67 mg/mL`).
 - mg: up to 3 decimals, trailing zeros removed (`2 mg`, `0.25 mg`, `1.9 mg`).
 - Percent: whole number (`5% under`, `3% over`).
@@ -215,7 +216,7 @@ Dark mode follows `prefers-color-scheme`.
 - SVG, vertical. Needle at the top, 0 at the top of the barrel, units increasing downward.
 - Minor ticks at every mark, labelled ticks per the syringe table.
 - Solution fill from 0 to the dose; stopper just below the fill; plunger rod below.
-- Orange line and label at the dose.
+- Orange line at the dose, with the dose number in bold ink just left of the barrel.
 - Won't fit: fill to capacity, no orange line, caution colour at the bottom.
 - No valid result: empty barrel, stopper at 0.
 - `role="img"` with a label such as "1 mL syringe drawn to 20 units".
