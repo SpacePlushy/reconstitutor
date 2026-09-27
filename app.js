@@ -33,10 +33,15 @@
   // The water amount tapped in the table. null means "use the recommendation".
   let selectedWaterMl = null;
 
+  // A non-breaking space keeps "20 units" from wrapping into "20" / "units".
+  function glueUnits(text) {
+    return text.replace(/(\d) (units?|mg\/mL|mL|mg)(?![\w/])/g, "$1 $2");
+  }
+
   function el(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
+    if (text !== undefined) node.textContent = glueUnits(text);
     return node;
   }
 
@@ -128,7 +133,7 @@
       radio.value = String(row.waterMl);
       radio.checked = row === selected;
       const label = el("label");
-      label.append(radio, Calc.formatWaterMl(row.waterMl));
+      label.append(radio, glueUnits(Calc.formatWaterMl(row.waterMl)));
       const waterCell = el("td", "option-water");
       waterCell.append(label);
       if (row.recommended) waterCell.append(el("span", "option-status is-recommended", "★ Recommended"));
