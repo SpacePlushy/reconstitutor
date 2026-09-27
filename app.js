@@ -58,11 +58,13 @@
     };
   }
 
-  // Field errors appear only once something is typed, so an empty form stays calm.
+  // Field errors appear only once something invalid is typed, so an empty form
+  // stays calm and "0." on the way to "0.5" doesn't flash red.
   function showFieldErrors(errors) {
     for (const key of Object.keys(fields)) {
       const error = errors.find((e) => e.field === key);
-      const message = error && fields[key].value.trim() !== "" ? error.message : "";
+      const text = fields[key].value;
+      const message = error && text.trim() !== "" && !Calc.isIncompleteAmount(text) ? error.message : "";
       fieldErrors[key].textContent = message;
       fieldErrors[key].hidden = !message;
       fields[key].setAttribute("aria-invalid", message ? "true" : "false");

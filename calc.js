@@ -53,6 +53,13 @@
     return Number.isFinite(value) && value > 0 ? value : null;
   }
 
+  // "0", "0." or "." mid-typing can still become a valid amount like 0.5.
+  function isIncompleteAmount(text) {
+    if (typeof text !== "string") return false;
+    const cleaned = text.trim();
+    return cleaned !== "" && /^0*[.,]?0*$/.test(cleaned);
+  }
+
   // --- Formatting ----------------------------------------------------------
 
   function formatMg(mg) {
@@ -63,17 +70,37 @@
     return `${decimals(mgPerMl, 0, 2)} mg/mL`;
   }
 
+  // Precise enough to agree with the units it converts to (1 unit = 0.01 mL).
   function formatMl(ml) {
-    return `${decimals(ml, 2, 3)} mL`;
+    const units = unitsNumber(ml * 100);
+    if (units === null) return "less than 0.001 mL";
+    const unitPlaces = units.includes(".") ? units.split(".")[1].length : 0;
+    return `${decimals(ml, 2, Math.max(2, unitPlaces + 2))} mL`;
   }
 
   function formatWaterMl(ml) {
     return `${decimals(ml, 1, 2)} mL`;
   }
 
+  // Units as a bare number: 1 decimal, or up to 3 when 1 decimal would show an
+  // off-mark dose as a whole number (26.04 must not read as the 26 mark).
+  // null means a real dose too small to show.
+  function unitsNumber(units) {
+    if (units > 0 && roundTo(units, 1) === 0) return null;
+    for (const places of [1, 2, 3]) {
+      const text = decimals(units, 0, places);
+      if (text.includes(".") || Math.abs(units - Number(text)) <= EPS) return text;
+    }
+    return decimals(units, 0, 3);
+  }
+
+  function formatUnitsNumber(units) {
+    return unitsNumber(units) ?? "<0.1";
+  }
+
   function formatUnits(units) {
-    if (units > 0 && roundTo(units, 1) === 0) return "less than 0.1 units";
-    const text = decimals(units, 0, 1);
+    const text = unitsNumber(units);
+    if (text === null) return "less than 0.1 units";
     return `${text} ${text === "1" ? "unit" : "units"}`;
   }
 
@@ -323,11 +350,13 @@
     SYRINGES,
     SYRINGE_ORDER,
     parseAmount,
+    isIncompleteAmount,
     formatMg,
     formatConcentration,
     formatMl,
     formatWaterMl,
     formatUnits,
+    formatUnitsNumber,
     formatPercentOff,
     formatDoses,
     drawForDose,

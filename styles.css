@@ -130,6 +130,23 @@ h1 {
   outline-offset: 3px;
 }
 
+/* The syringe picker shares its column's width, so it can't run into the syringe. */
+.field .segmented {
+  display: flex;
+  max-width: 18em;
+}
+
+.field .segmented label {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.field .segmented span {
+  padding-right: 4px;
+  padding-left: 4px;
+  text-align: center;
+}
+
 /* Inputs and the syringe, side by side */
 
 .workspace {
@@ -342,6 +359,15 @@ h1 {
 @media (max-width: 480px) {
   .options-table th:nth-child(2),
   .options-table td:nth-child(2) { display: none; }
+}
+
+/* The narrowest phones: a slimmer syringe column and smaller picker labels. */
+@media (max-width: 340px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 88px;
+    gap: 12px;
+  }
+  .field .segmented span { font-size: 15px; }
 }
 
 /* Worked math */

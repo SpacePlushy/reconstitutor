@@ -333,3 +333,64 @@ test("waterOptions survives extreme inputs", () => {
   assert.equal(whole.recommendedMl, 1);
   assert.deepEqual(whole.rows.map((r) => r.status), ["ok", "wont-fit", "wont-fit", "wont-fit", "wont-fit"]);
 });
+
+// --- display edge cases found in review -----------------------------------
+
+test("formatUnits adds decimals instead of rounding an off-mark dose to a whole number", () => {
+  assert.equal(Calc.formatUnits(26.041666667), "26.04 units");
+  assert.equal(Calc.formatUnits(19.95), "19.95 units");
+  assert.equal(Calc.formatUnits(20.004), "20.004 units");
+  assert.equal(Calc.formatUnits(20.8333), "20.8 units");
+  assert.equal(Calc.formatUnits(30.000000000000004), "30 units");
+});
+
+test("formatUnitsNumber gives the bare number for labels", () => {
+  assert.equal(Calc.formatUnitsNumber(40), "40");
+  assert.equal(Calc.formatUnitsNumber(19.95), "19.95");
+  assert.equal(Calc.formatUnitsNumber(0.03), "<0.1");
+});
+
+test("formatMl keeps the same precision as the units it converts to", () => {
+  assert.equal(Calc.formatMl(0.1995), "0.1995 mL");
+  assert.equal(Calc.formatMl(0.2604166667), "0.2604 mL");
+  assert.equal(Calc.formatMl(0.4), "0.40 mL");
+});
+
+test("formatMl never shows a real volume as 0.00 mL", () => {
+  assert.equal(Calc.formatMl(0.0004), "less than 0.001 mL");
+  assert.equal(Calc.formatMl(0), "0.00 mL");
+});
+
+test("drawForDose: worked math and nearest mark agree for a dose just off a mark", () => {
+  const { result } = draw(10, 0.7, 2.85);
+  assert.equal(result.units, 19.95);
+  assert.equal(result.workedMath[2], "0.1995 mL × 100 = 19.95 units");
+  assert.equal(result.nearestMarkText, "Nearest mark: 20 units = 2.857 mg (less than 1% over)");
+});
+
+test("drawForDose: a tiny dose never shows 0.00 mL", () => {
+  const { result } = draw(10, 1, 0.004);
+  assert.deepEqual(result.workedMath.slice(1), [
+    "0.004 mg ÷ 10 mg/mL = less than 0.001 mL",
+    "less than 0.001 mL × 100 = less than 0.1 units",
+  ]);
+});
+
+test("waterOptions: a between-marks row never displays as a whole mark", () => {
+  const row = options(12, 1.25).rows.find((r) => r.waterMl === 2.5);
+  assert.equal(row.status, "between-marks");
+  assert.equal(Calc.formatUnits(row.units), "26.04 units");
+  assert.equal(
+    row.note,
+    "At 2.5 mL, your dose is 26.04 units, between marks. The nearest mark, 26 units, gives 1.248 mg (less than 1% under).",
+  );
+});
+
+test("isIncompleteAmount spots text that could still become a valid amount", () => {
+  for (const text of ["0", "0.", ".", "0,", "00", "0.0", " 0. "]) {
+    assert.equal(Calc.isIncompleteAmount(text), true, JSON.stringify(text));
+  }
+  for (const text of ["", "abc", "-1", "0.5", "5 mg", "1.2.3"]) {
+    assert.equal(Calc.isIncompleteAmount(text), false, JSON.stringify(text));
+  }
+});

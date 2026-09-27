@@ -50,3 +50,8 @@ test("renderSyringe marks state, syringe, label and positions", () => {
   assert.equal(count(svg, /translateY\(84px\)/g), 2);
   assert.match(svg, /class="syr-drawlabel"[^>]*>20<\/text>/);
 });
+
+test("syringePosition labels a tiny dose with a number, not a word", () => {
+  assert.equal(Syringe.syringePosition({ syringe: "1", units: 0.03, state: "ok" }).label, "<0.1");
+  assert.equal(Syringe.syringePosition({ syringe: "1", units: 19.95, state: "ok" }).label, "19.95");
+});

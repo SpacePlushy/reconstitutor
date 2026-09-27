@@ -35,7 +35,7 @@
     return {
       fillScale: round3(offset / SCALE_LENGTH),
       offset,
-      label: state === "ok" ? Calc.formatUnits(units).split(" ")[0] : "",
+      label: state === "ok" ? Calc.formatUnitsNumber(units) : "",
     };
   }
 
