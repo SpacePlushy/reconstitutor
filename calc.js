@@ -96,6 +96,120 @@
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
+  // --- Marks and checks ----------------------------------------------------
+
+  function assess(units, syringe) {
+    const { markSpacing, capacityUnits } = SYRINGES[syringe];
+    // Halfway doses round up to the higher mark.
+    const nearestMark = Math.round(units / markSpacing + EPS) * markSpacing;
+    return {
+      nearestMark,
+      onMark: Math.abs(units - nearestMark) <= EPS,
+      fits: units <= capacityUnits + EPS,
+      measurable: units >= 10 * markSpacing - EPS,
+    };
+  }
+
+  function unitsFor(vialMg, doseMg, waterMl) {
+    return snap((100 * doseMg * waterMl) / vialMg);
+  }
+
+  function dosesInVial(vialMg, doseMg) {
+    const count = Math.floor(vialMg / doseMg + EPS);
+    const leftover = snap(vialMg - count * doseMg);
+    return { count, leftoverMg: leftover > EPS ? leftover : 0 };
+  }
+
+  function checkInputs(values, required) {
+    const errors = required.filter((field) => !(values[field] > 0)).map((field) => ({ ...MISSING[field] }));
+    if (errors.length === 0 && values.doseMg > values.vialMg + EPS) {
+      errors.push({
+        code: "dose-exceeds-vial",
+        message: `Your dose is more than the whole vial (${formatMg(values.vialMg)}).`,
+      });
+    }
+    return errors;
+  }
+
+  function oneMarkPercent(units, syringe) {
+    return Math.round((SYRINGES[syringe].markSpacing / units) * 100);
+  }
+
+  // --- Draw a dose ---------------------------------------------------------
+
+  function wontFitMessage(units, syringe) {
+    const { label, capacityUnits } = SYRINGES[syringe];
+    const bigger = SYRINGE_ORDER.filter((key) => {
+      const other = SYRINGES[key];
+      return other.capacityUnits > capacityUnits && units <= other.capacityUnits + EPS;
+    });
+    const draws = Math.ceil(units / capacityUnits - EPS);
+    const advice = bigger.length
+      ? `Use ${syringePhrase(bigger)}, or split it into ${draws} draws.`
+      : `Split it into ${draws} draws.`;
+    return `${formatUnits(units)} won't fit in a ${label} (${capacityUnits}-unit) syringe. ${advice}`;
+  }
+
+  function hardToMeasureMessage(units, syringe) {
+    const finer = SYRINGE_ORDER.filter((key) => {
+      const other = assess(units, key);
+      return key !== syringe && other.fits && other.measurable;
+    });
+    const advice = finer.length
+      ? `${capitalize(syringePhrase(finer))} reads more finely.`
+      : "Mixing your next vial with more water makes each dose bigger and easier to measure.";
+    const spacing = formatUnits(SYRINGES[syringe].markSpacing);
+    return `Each mark on this syringe is ${spacing}, so misreading by one mark changes this dose by ${oneMarkPercent(units, syringe)}%. ${advice}`;
+  }
+
+  function drawForDose({ vialMg, waterMl, doseMg, syringe }) {
+    const errors = checkInputs({ vialMg, waterMl, doseMg }, ["vialMg", "waterMl", "doseMg"]);
+    if (errors.length) return { result: null, errors, warnings: [] };
+
+    const concentration = snap(vialMg / waterMl);
+    const ml = snap((doseMg * waterMl) / vialMg);
+    const units = unitsFor(vialMg, doseMg, waterMl);
+    const check = assess(units, syringe);
+    const doseAtMarkMg = snap((check.nearestMark * vialMg) / (100 * waterMl));
+    const nearestMarkOff = (doseAtMarkMg - doseMg) / doseMg;
+    const doses = dosesInVial(vialMg, doseMg);
+    const showNearest = check.fits && !check.onMark && check.nearestMark > 0;
+
+    const warnings = [];
+    if (!check.fits) {
+      errors.push({ code: "wont-fit", message: wontFitMessage(units, syringe) });
+    } else if (!check.measurable) {
+      warnings.push({ code: "hard-to-measure", message: hardToMeasureMessage(units, syringe) });
+    }
+
+    return {
+      result: {
+        concentration,
+        ml,
+        units,
+        unitsPerMg: snap((100 * waterMl) / vialMg),
+        onMark: check.onMark,
+        fits: check.fits,
+        measurable: check.measurable,
+        nearestMark: check.nearestMark,
+        doseAtMarkMg,
+        nearestMarkOff,
+        nearestMarkText: showNearest
+          ? `Nearest mark: ${formatUnits(check.nearestMark)} = ${formatMg(doseAtMarkMg)} (${formatPercentOff(nearestMarkOff)})`
+          : null,
+        dosesInVial: doses.count,
+        leftoverMg: doses.leftoverMg,
+        workedMath: [
+          `${formatMg(vialMg)} ÷ ${formatWaterMl(waterMl)} = ${formatConcentration(concentration)}`,
+          `${formatMg(doseMg)} ÷ ${formatConcentration(concentration)} = ${formatMl(ml)}`,
+          `${formatMl(ml)} × 100 = ${formatUnits(units)}`,
+        ],
+      },
+      errors,
+      warnings,
+    };
+  }
+
   const api = {
     SYRINGES,
     SYRINGE_ORDER,
@@ -107,6 +221,7 @@
     formatUnits,
     formatPercentOff,
     formatDoses,
+    drawForDose,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

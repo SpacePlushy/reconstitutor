@@ -86,3 +86,129 @@ test("formatDoses counts full doses and any leftover", () => {
   assert.equal(Calc.formatDoses(1, 0.5), "1 dose in the vial, plus 0.5 mg left over");
   assert.equal(Calc.formatDoses(4, 2), "4 doses in the vial, plus 2 mg left over");
 });
+
+// --- drawForDose --------------------------------------------------
+
+test("drawForDose: 10 mg vial, 2 mL water, 2 mg dose", () => {
+  const { result, errors, warnings } = draw(10, 2, 2);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings, []);
+  assert.equal(result.concentration, 5);
+  assert.equal(result.ml, 0.4);
+  assert.equal(result.units, 40);
+  assert.equal(result.unitsPerMg, 20);
+  assert.equal(result.onMark, true);
+  assert.equal(result.fits, true);
+  assert.equal(result.measurable, true);
+  assert.equal(result.nearestMarkText, null);
+  assert.equal(result.dosesInVial, 5);
+  assert.equal(result.leftoverMg, 0);
+  assert.deepEqual(result.workedMath, [
+    "10 mg ÷ 2.0 mL = 5 mg/mL",
+    "2 mg ÷ 5 mg/mL = 0.40 mL",
+    "0.40 mL × 100 = 40 units",
+  ]);
+});
+
+test("drawForDose removes floating-point noise", () => {
+  const { result } = draw(5, 3, 0.5, "0.5");
+  assert.equal(result.units, 30);
+  assert.equal(result.ml, 0.3);
+  assert.equal(result.onMark, true);
+});
+
+test("drawForDose: a dose halfway between 2-unit marks rounds up", () => {
+  const { result, warnings } = draw(10, 2, 1.95);
+  assert.equal(result.units, 39);
+  assert.equal(result.onMark, false);
+  assert.equal(result.nearestMark, 40);
+  assert.equal(result.doseAtMarkMg, 2);
+  assert.equal(result.nearestMarkText, "Nearest mark: 40 units = 2 mg (3% over)");
+  assert.deepEqual(warnings, []);
+});
+
+test("drawForDose: 1-unit marks on the smaller syringes", () => {
+  const { result } = draw(10, 2, 2.03, "0.5");
+  assert.equal(result.units, 40.6);
+  assert.equal(result.nearestMark, 41);
+  assert.equal(result.nearestMarkText, "Nearest mark: 41 units = 2.05 mg (1% over)");
+});
+
+test("drawForDose: leftover after the last full dose", () => {
+  const { result } = draw(12, 2, 2.5);
+  assert.equal(result.dosesInVial, 4);
+  assert.equal(result.leftoverMg, 2);
+});
+
+test("drawForDose reports missing inputs by field", () => {
+  const { result, errors } = Calc.drawForDose({ vialMg: null, waterMl: 2, doseMg: null, syringe: "1" });
+  assert.equal(result, null);
+  assert.deepEqual(errors.map((e) => [e.code, e.field]), [["missing-vial", "vialMg"], ["missing-dose", "doseMg"]]);
+  assert.equal(errors[0].message, "Enter the vial amount in mg.");
+  const water = Calc.drawForDose({ vialMg: 10, waterMl: null, doseMg: 2, syringe: "1" });
+  assert.equal(water.errors[0].message, "Enter the water added in mL.");
+});
+
+test("drawForDose rejects a dose bigger than the vial", () => {
+  const { result, errors } = draw(10, 2, 12);
+  assert.equal(result, null);
+  assert.deepEqual(codes(errors), ["dose-exceeds-vial"]);
+  assert.equal(errors[0].message, "Your dose is more than the whole vial (10 mg).");
+});
+
+test("drawForDose allows a dose equal to the whole vial", () => {
+  const { result, errors } = draw(10, 1, 10);
+  assert.deepEqual(errors, []);
+  assert.equal(result.units, 100);
+  assert.equal(result.fits, true);
+  assert.equal(result.dosesInVial, 1);
+});
+
+test("drawForDose: dose that won't fit the chosen syringe", () => {
+  const { result, errors, warnings } = draw(10, 2, 2, "0.3");
+  assert.equal(result.units, 40);
+  assert.equal(result.fits, false);
+  assert.equal(result.nearestMarkText, null);
+  assert.deepEqual(codes(errors), ["wont-fit"]);
+  assert.equal(errors[0].message, "40 units won't fit in a 0.3 mL (30-unit) syringe. Use a 0.5 mL or 1 mL syringe, or split it into 2 draws.");
+  assert.deepEqual(warnings, []);
+});
+
+test("drawForDose: dose that won't fit any syringe", () => {
+  const { errors } = draw(10, 3, 5);
+  assert.equal(errors[0].message, "150 units won't fit in a 1 mL (100-unit) syringe. Split it into 2 draws.");
+});
+
+test("drawForDose: a dose exactly at capacity fits", () => {
+  const { result, errors } = draw(10, 1.5, 2, "0.3");
+  assert.equal(result.units, 30);
+  assert.deepEqual(errors, []);
+});
+
+test("drawForDose: 1 mL syringe needs at least 20 units to be measurable", () => {
+  const below = draw(10, 1, 1.8);
+  assert.equal(below.result.units, 18);
+  assert.deepEqual(codes(below.warnings), ["hard-to-measure"]);
+  assert.equal(
+    below.warnings[0].message,
+    "Each mark on this syringe is 2 units, so misreading by one mark changes this dose by 11%. A 0.3 mL or 0.5 mL syringe reads more finely.",
+  );
+  assert.deepEqual(draw(10, 1, 2).warnings, []);
+});
+
+test("drawForDose: 0.3 and 0.5 mL syringes need at least 10 units", () => {
+  const below = draw(10, 1, 0.9, "0.5");
+  assert.equal(below.result.units, 9);
+  assert.equal(
+    below.warnings[0].message,
+    "Each mark on this syringe is 1 unit, so misreading by one mark changes this dose by 11%. Mixing your next vial with more water makes each dose bigger and easier to measure.",
+  );
+  assert.deepEqual(draw(10, 1, 1, "0.3").warnings, []);
+});
+
+test("drawForDose: tiny doses rounding to mark 0 get no nearest-mark line", () => {
+  const { result, warnings } = draw(100, 1, 0.005);
+  assert.equal(result.nearestMark, 0);
+  assert.equal(result.nearestMarkText, null);
+  assert.deepEqual(codes(warnings), ["hard-to-measure"]);
+});
