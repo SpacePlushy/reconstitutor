@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Retatrutide mixing calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="masthead">
+      <h1>Retatrutide</h1>
+      <fieldset>
+        <legend class="visually-hidden">Mode</legend>
+        <div class="segmented">
+          <label><input type="radio" name="mode" value="mix" checked><span>Mix a vial</span></label>
+          <label><input type="radio" name="mode" value="draw"><span>Draw a dose</span></label>
+        </div>
+      </fieldset>
+    </header>
+
+    <div class="workspace">
+      <div class="controls">
+        <div class="field">
+          <label for="vial">Vial</label>
+          <div class="amount">
+            <input id="vial" type="text" inputmode="decimal" autocomplete="off" aria-describedby="vial-error">
+            <span class="amount-unit">mg</span>
+          </div>
+          <p class="field-error" id="vial-error" hidden></p>
+        </div>
+
+        <div class="field" data-mode="draw" hidden>
+          <label for="water">Water added</label>
+          <div class="amount">
+            <input id="water" type="text" inputmode="decimal" autocomplete="off" aria-describedby="water-error">
+            <span class="amount-unit">mL</span>
+          </div>
+          <p class="field-error" id="water-error" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="dose">Your dose</label>
+          <div class="amount">
+            <input id="dose" type="text" inputmode="decimal" autocomplete="off" aria-describedby="dose-error">
+            <span class="amount-unit">mg</span>
+          </div>
+          <p class="field-error" id="dose-error" hidden></p>
+        </div>
+
+        <fieldset class="field">
+          <legend>Syringe</legend>
+          <div class="segmented">
+            <label><input type="radio" name="syringe" value="0.3"><span>0.3 mL</span></label>
+            <label><input type="radio" name="syringe" value="0.5"><span>0.5 mL</span></label>
+            <label><input type="radio" name="syringe" value="1" checked><span>1 mL</span></label>
+          </div>
+        </fieldset>
+
+        <section class="answer" id="answer" aria-live="polite"></section>
+      </div>
+
+      <figure class="syringe">
+        <div class="syringe-art" id="syringe-art"></div>
+        <figcaption>Read at the top edge of the rubber stopper.</figcaption>
+      </figure>
+    </div>
+
+    <section class="options" id="options" data-mode="mix" aria-label="Water amounts"></section>
+    <section class="math" id="math" data-mode="draw" aria-label="How this was worked out" hidden></section>
+
+    <footer class="footnote">This does arithmetic only. Check your numbers with your prescriber or pharmacist.</footer>
+  </main>
+
+  <script src="calc.js"></script>
+  <script src="syringe.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
