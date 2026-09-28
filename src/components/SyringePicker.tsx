@@ -32,6 +32,11 @@ export function SyringePicker({ value, onChange }: SyringePickerProps) {
           <ToggleGroupItem
             key={key}
             value={key}
+            // Radios select on arrow keys, so focus selects too. Tabbing in lands on
+            // the chosen syringe, which must not count as a change (it resets the row).
+            onFocus={() => {
+              if (key !== value) onChange(key);
+            }}
             className="h-11 flex-1 border-foreground px-1 text-base font-semibold data-[state=on]:bg-foreground data-[state=on]:text-background data-[state=on]:hover:bg-foreground"
           >
             {SYRINGES[key].label}

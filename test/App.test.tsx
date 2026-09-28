@@ -75,6 +75,24 @@ test("pressing the chosen syringe again keeps it chosen", async () => {
   expect(oneMl).toHaveAttribute("aria-checked", "true");
 });
 
+test("arrow keys on the syringe picker choose the syringe, like radio buttons", async () => {
+  const { user } = setup();
+  screen.getByRole("radio", { name: "1 mL" }).focus();
+  await user.keyboard("{ArrowLeft}");
+  expect(screen.getByRole("radio", { name: "0.5 mL" })).toHaveAttribute("aria-checked", "true");
+  expect(screen.getByRole("radio", { name: "1 mL" })).toHaveAttribute("aria-checked", "false");
+});
+
+test("tabbing back onto the syringe picker keeps the chosen row", async () => {
+  const { user, answer, row, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  await user.click(row("2.0 mL"));
+  await user.tab({ shift: true });
+  expect(screen.getByRole("radio", { name: "1 mL" })).toHaveFocus();
+  expect(answer()).toHaveTextContent("Add 2.0 mL");
+});
+
 // --- answer and syringe ----------------------------------------------
 
 test("mix: 10 mg vial, 2 mg dose on a 1 mL syringe answers 1.0 mL", async () => {
