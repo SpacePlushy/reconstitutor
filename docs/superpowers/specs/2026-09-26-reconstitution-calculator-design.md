@@ -1,7 +1,7 @@
 # Retatrutide reconstitution calculator — design
 
 Date: 2026-09-26
-Status: approved in conversation, awaiting written-spec review
+Status: implemented. Its **Visual design** and **Architecture** sections are superseded by [2026-09-27-react-typescript-migration-design.md](2026-09-27-react-typescript-migration-design.md); everything else still applies.
 
 ## Purpose
 
@@ -31,7 +31,7 @@ Assumptions (confirmed during design review):
 - Entering vial mg, dose mg and syringe gives a recommended water amount, how to measure it, and where the dose will sit on the syringe.
 - Every number shown matches the formulas below, confirmed by automated tests.
 - Mistakes that cause bad doses (dose bigger than vial, dose too big for syringe, dose too small to measure, dose between marks) produce a plain-language warning with a next step.
-- Opening `index.html` directly from disk works with no server and no install.
+- ~~Opening `index.html` directly from disk works with no server and no install.~~ Superseded by the React + TypeScript rebuild.
 
 ## Out of scope
 
