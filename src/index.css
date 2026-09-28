@@ -90,3 +90,80 @@
     outline-offset: 2px;
   }
 }
+
+/* The syringe ------------------------------------------------------------ */
+
+@layer components {
+  .syr-needle {
+    stroke: var(--muted-foreground);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .syr-hub {
+    fill: var(--muted-foreground);
+  }
+  .syr-barrel {
+    fill: var(--barrel);
+    stroke: var(--foreground);
+    stroke-width: 1.5;
+  }
+  .syr-rod {
+    fill: var(--rod);
+  }
+  .syr-fill {
+    fill: var(--solution);
+    transform-box: fill-box;
+    transform-origin: top;
+  }
+  .syr-stopper {
+    fill: var(--stopper);
+  }
+  .syr-tick {
+    stroke: var(--foreground);
+    stroke-width: 1;
+  }
+  .syr-tick-major {
+    stroke-width: 1.5;
+  }
+  .syr-label {
+    fill: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .syr-drawline {
+    stroke: var(--draw);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+  .syr-drawlabel {
+    fill: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    text-anchor: end;
+  }
+  .syr-overflow {
+    stroke: var(--destructive);
+    stroke-width: 3;
+    stroke-dasharray: 4 3;
+  }
+  .syr-flange,
+  .syr-thumb {
+    fill: var(--foreground);
+  }
+  .syr:not([data-state="ok"]) .syr-draw,
+  .syr:not([data-state="overflow"]) .syr-overflow {
+    display: none;
+  }
+  .syr-fill,
+  .syr-moving {
+    transition: transform 250ms ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .syr-fill,
+    .syr-moving {
+      transition: none;
+    }
+  }
+}

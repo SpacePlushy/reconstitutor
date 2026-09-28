@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { AmountField } from "@/components/AmountField";
+import { AnswerCard } from "@/components/AnswerCard";
 import { ModeTabs, type Mode } from "@/components/ModeTabs";
+import { SyringeDiagram } from "@/components/SyringeDiagram";
 import { SyringePicker } from "@/components/SyringePicker";
 import {
   drawForDose,
@@ -11,6 +13,7 @@ import {
   type CalcMessage,
   type SyringeKey,
 } from "@/lib/calc";
+import type { SyringeView } from "@/lib/syringe";
 
 type AmountText = Record<Field, string>;
 
@@ -39,6 +42,19 @@ export function App() {
   const mix = useMemo(() => waterOptions(values), [values]);
   const draw = useMemo(() => drawForDose(values), [values]);
 
+  const selected = mix.rows.find((row) => row.recommended) ?? mix.rows[0] ?? null;
+
+  let view: SyringeView = { syringe, units: 0, state: "empty" };
+  if (mode === "mix" && selected) {
+    view = {
+      syringe,
+      units: selected.units,
+      state: selected.status === "wont-fit" ? "overflow" : "ok",
+    };
+  } else if (mode === "draw" && draw.result) {
+    view = { syringe, units: draw.result.units, state: draw.result.fits ? "ok" : "overflow" };
+  }
+
   const errors = mode === "mix" ? mix.errors : draw.errors;
 
   function changeText(field: Field, value: string) {
@@ -48,40 +64,48 @@ export function App() {
   return (
     <main className="mx-auto max-w-[760px] px-4 pt-5 pb-10 sm:pt-10">
       <ModeTabs mode={mode} onModeChange={setMode}>
-        <div className="flex min-w-0 flex-col gap-5">
-          <AmountField
-            id="vial"
-            label="Vial"
-            unit="mg"
-            value={text.vialMg}
-            error={visibleError("vialMg", text.vialMg, errors)}
-            onChange={(value) => {
-              changeText("vialMg", value);
-            }}
-          />
-          {mode === "draw" && (
+        <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_10rem] sm:gap-10">
+          <div className="flex min-w-0 flex-col gap-5">
             <AmountField
-              id="water"
-              label="Water added"
-              unit="mL"
-              value={text.waterMl}
-              error={visibleError("waterMl", text.waterMl, errors)}
+              id="vial"
+              label="Vial"
+              unit="mg"
+              value={text.vialMg}
+              error={visibleError("vialMg", text.vialMg, errors)}
               onChange={(value) => {
-                changeText("waterMl", value);
+                changeText("vialMg", value);
               }}
             />
-          )}
-          <AmountField
-            id="dose"
-            label="Your dose"
-            unit="mg"
-            value={text.doseMg}
-            error={visibleError("doseMg", text.doseMg, errors)}
-            onChange={(value) => {
-              changeText("doseMg", value);
-            }}
-          />
-          <SyringePicker value={syringe} onChange={setSyringe} />
+            {mode === "draw" && (
+              <AmountField
+                id="water"
+                label="Water added"
+                unit="mL"
+                value={text.waterMl}
+                error={visibleError("waterMl", text.waterMl, errors)}
+                onChange={(value) => {
+                  changeText("waterMl", value);
+                }}
+              />
+            )}
+            <AmountField
+              id="dose"
+              label="Your dose"
+              unit="mg"
+              value={text.doseMg}
+              error={visibleError("doseMg", text.doseMg, errors)}
+              onChange={(value) => {
+                changeText("doseMg", value);
+              }}
+            />
+            <SyringePicker value={syringe} onChange={setSyringe} />
+            {mode === "mix" ? (
+              <AnswerCard mode="mix" response={mix} selected={selected} syringe={syringe} />
+            ) : (
+              <AnswerCard mode="draw" response={draw} />
+            )}
+          </div>
+          <SyringeDiagram {...view} />
         </div>
       </ModeTabs>
       <footer className="mt-10 max-w-[40em] text-sm text-muted-foreground">

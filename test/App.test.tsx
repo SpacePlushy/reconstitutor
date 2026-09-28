@@ -66,3 +66,62 @@ test("pressing the chosen syringe again keeps it chosen", async () => {
   await user.click(oneMl);
   expect(oneMl).toHaveAttribute("aria-checked", "true");
 });
+
+// --- answer and syringe ----------------------------------------------
+
+test("mix: 10 mg vial, 2 mg dose on a 1 mL syringe answers 1.0 mL", async () => {
+  const { answer, syringe, type } = setup();
+  expect(answer()).toHaveTextContent("Enter your vial and dose to see how much water to add.");
+  expect(syringe()).toHaveAccessibleName("1 mL syringe, empty");
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  expect(answer()).toHaveTextContent("Add 1.0 mL of bacteriostatic water");
+  expect(answer()).toHaveTextContent("Measure: 1 full syringe");
+  expect(answer()).toHaveTextContent("Makes 10 mg/mL. Your dose: 20 units.");
+  expect(answer()).toHaveTextContent("5 doses in the vial.");
+  expect(syringe()).toHaveAccessibleName("1 mL syringe drawn to 20 units");
+  expect(syringe()).toHaveAttribute("data-state", "ok");
+});
+
+test("draw: a dose that won't fit shows the message and the overflow state", async () => {
+  const { user, answer, syringe, type } = setup();
+  await user.click(screen.getByRole("tab", { name: "Draw a dose" }));
+  expect(answer()).toHaveTextContent("Enter your vial, water and dose to see where to draw.");
+  await type("Vial", "10");
+  await type("Water added", "2");
+  await type("Your dose", "2");
+  expect(answer()).toHaveTextContent("Draw to 40 units");
+  expect(answer()).toHaveTextContent("0.40 mL at 5 mg/mL. 5 doses in the vial.");
+  expect(syringe()).toHaveAccessibleName("1 mL syringe drawn to 40 units");
+
+  await user.click(screen.getByRole("radio", { name: "0.3 mL" }));
+  expect(answer()).toHaveTextContent(
+    "40 units won't fit in a 0.3 mL (30-unit) syringe. Use a 0.5 mL or 1 mL syringe, or split it into 2 draws.",
+  );
+  expect(syringe()).toHaveAttribute("data-state", "overflow");
+  expect(syringe()).toHaveAccessibleName("0.3 mL syringe, dose doesn't fit");
+});
+
+test("draw: a dose bigger than the vial shows a general error and an empty syringe", async () => {
+  const { user, answer, syringe, type } = setup();
+  await user.click(screen.getByRole("tab", { name: "Draw a dose" }));
+  await type("Vial", "10");
+  await type("Water added", "2");
+  await type("Your dose", "12");
+  expect(answer()).toHaveTextContent("Your dose is more than the whole vial (10 mg).");
+  expect(syringe()).toHaveAttribute("data-state", "empty");
+});
+
+test("the syringe keeps its drawing while the dose changes, and redraws for a new size", async () => {
+  const { user, syringe, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  const drawing = syringe();
+  expect(drawing).toHaveAccessibleName("1 mL syringe drawn to 20 units");
+  await user.clear(screen.getByLabelText("Your dose"));
+  await type("Your dose", "3");
+  expect(syringe()).toBe(drawing);
+  expect(drawing).toHaveAccessibleName("1 mL syringe drawn to 30 units");
+  await user.click(screen.getByRole("radio", { name: "0.5 mL" }));
+  expect(syringe()).not.toBe(drawing);
+});
