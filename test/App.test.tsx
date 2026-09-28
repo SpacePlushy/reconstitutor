@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test } from "vitest";
 import { App } from "@/App";
@@ -124,4 +124,89 @@ test("the syringe keeps its drawing while the dose changes, and redraws for a ne
   expect(drawing).toHaveAccessibleName("1 mL syringe drawn to 30 units");
   await user.click(screen.getByRole("radio", { name: "0.5 mL" }));
   expect(syringe()).not.toBe(drawing);
+});
+
+// --- water options and worked math -----------------------------------
+
+test("mix: the recommended row starts selected", async () => {
+  const { waterRadio, row, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  expect(waterRadio("1.0 mL")).toBeChecked();
+  expect(within(row("1.0 mL")).getByText("Recommended")).toBeInTheDocument();
+});
+
+test("mix: tapping anywhere on a row selects it", async () => {
+  const { user, answer, waterRadio, row, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  await user.click(within(row("2.0 mL")).getByText("40 units"));
+  expect(waterRadio("2.0 mL")).toBeChecked();
+  expect(waterRadio("2.0 mL")).toHaveFocus();
+  expect(answer()).toHaveTextContent("Add 2.0 mL of bacteriostatic water");
+  expect(answer()).toHaveTextContent("Your dose: 40 units.");
+});
+
+test("mix: arrow keys move the chosen row and the answer follows", async () => {
+  const { user, answer, waterRadio, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  waterRadio("1.0 mL").focus();
+  await user.keyboard("{ArrowDown}");
+  expect(waterRadio("1.5 mL")).toBeChecked();
+  expect(answer()).toHaveTextContent("Add 1.5 mL of bacteriostatic water");
+});
+
+test("mix: editing the dose or changing syringe goes back to the recommendation", async () => {
+  const { user, answer, row, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  await user.click(row("2.0 mL"));
+  expect(answer()).toHaveTextContent("Add 2.0 mL");
+
+  await user.clear(screen.getByLabelText("Your dose"));
+  await type("Your dose", "2");
+  expect(answer()).toHaveTextContent("Add 1.0 mL");
+
+  await user.click(row("2.0 mL"));
+  expect(answer()).toHaveTextContent("Add 2.0 mL");
+  await user.click(screen.getByRole("radio", { name: "0.5 mL" }));
+  expect(screen.getByRole("radio", { name: "0.5 mL" })).toHaveAttribute("aria-checked", "true");
+  expect(answer()).toHaveTextContent("Add 1.0 mL");
+});
+
+test("switching tabs keeps the chosen row", async () => {
+  const { user, answer, row, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  await user.click(row("2.0 mL"));
+  await user.click(screen.getByRole("tab", { name: "Draw a dose" }));
+  await user.click(screen.getByRole("tab", { name: "Mix a vial" }));
+  expect(answer()).toHaveTextContent("Add 2.0 mL");
+});
+
+test("mix: a row that won't fit explains why and shows the overflow", async () => {
+  const { user, answer, syringe, row, type } = setup();
+  await type("Vial", "10");
+  await type("Your dose", "2");
+  await user.click(screen.getByRole("radio", { name: "0.3 mL" }));
+  await user.click(row("2.0 mL"));
+  expect(within(row("2.0 mL")).getByText("Won't fit")).toBeInTheDocument();
+  expect(answer()).toHaveTextContent(
+    "At 2.0 mL, your dose is 40 units, more than a 0.3 mL syringe holds.",
+  );
+  expect(syringe()).toHaveAttribute("data-state", "overflow");
+});
+
+test("draw: the worked math appears only once there is an answer", async () => {
+  const { user, type } = setup();
+  const heading = () => screen.queryByRole("heading", { name: "How this was worked out" });
+  await user.click(screen.getByRole("tab", { name: "Draw a dose" }));
+  await type("Vial", "10");
+  await type("Water added", "2");
+  await type("Your dose", "2");
+  expect(heading()).toBeInTheDocument();
+  expect(screen.getByText("0.40 mL × 100 = 40 units")).toBeInTheDocument();
+  await type("Your dose", "0");
+  expect(heading()).not.toBeInTheDocument();
 });

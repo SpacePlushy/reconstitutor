@@ -4,6 +4,8 @@ import { AnswerCard } from "@/components/AnswerCard";
 import { ModeTabs, type Mode } from "@/components/ModeTabs";
 import { SyringeDiagram } from "@/components/SyringeDiagram";
 import { SyringePicker } from "@/components/SyringePicker";
+import { WaterOptionsTable } from "@/components/WaterOptionsTable";
+import { WorkedMath } from "@/components/WorkedMath";
 import {
   drawForDose,
   isIncompleteAmount,
@@ -29,6 +31,8 @@ export function App() {
   const [mode, setMode] = useState<Mode>("mix");
   const [text, setText] = useState<AmountText>({ vialMg: "", waterMl: "", doseMg: "" });
   const [syringe, setSyringe] = useState<SyringeKey>("1");
+  // The water amount tapped in the table. null means "use the recommendation".
+  const [selectedWaterMl, setSelectedWaterMl] = useState<number | null>(null);
 
   const values = useMemo(
     () => ({
@@ -42,7 +46,11 @@ export function App() {
   const mix = useMemo(() => waterOptions(values), [values]);
   const draw = useMemo(() => drawForDose(values), [values]);
 
-  const selected = mix.rows.find((row) => row.recommended) ?? mix.rows[0] ?? null;
+  const selected =
+    mix.rows.find((row) => row.waterMl === selectedWaterMl) ??
+    mix.rows.find((row) => row.recommended) ??
+    mix.rows[0] ??
+    null;
 
   let view: SyringeView = { syringe, units: 0, state: "empty" };
   if (mode === "mix" && selected) {
@@ -59,6 +67,12 @@ export function App() {
 
   function changeText(field: Field, value: string) {
     setText((previous) => ({ ...previous, [field]: value }));
+    setSelectedWaterMl(null);
+  }
+
+  function changeSyringe(next: SyringeKey) {
+    setSyringe(next);
+    setSelectedWaterMl(null);
   }
 
   return (
@@ -98,7 +112,7 @@ export function App() {
                 changeText("doseMg", value);
               }}
             />
-            <SyringePicker value={syringe} onChange={setSyringe} />
+            <SyringePicker value={syringe} onChange={changeSyringe} />
             {mode === "mix" ? (
               <AnswerCard mode="mix" response={mix} selected={selected} syringe={syringe} />
             ) : (
@@ -107,6 +121,15 @@ export function App() {
           </div>
           <SyringeDiagram {...view} />
         </div>
+        {mode === "mix" ? (
+          <WaterOptionsTable
+            rows={mix.rows}
+            selectedWaterMl={selected?.waterMl ?? null}
+            onSelect={setSelectedWaterMl}
+          />
+        ) : (
+          draw.result && <WorkedMath lines={draw.result.workedMath} />
+        )}
       </ModeTabs>
       <footer className="mt-10 max-w-[40em] text-sm text-muted-foreground">
         This does arithmetic only. Check your numbers with your prescriber or pharmacist.
