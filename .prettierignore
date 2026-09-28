@@ -1,0 +1,8 @@
+dist
+coverage
+package-lock.json
+legacy
+docs
+.superpowers
+.github
+.claude
