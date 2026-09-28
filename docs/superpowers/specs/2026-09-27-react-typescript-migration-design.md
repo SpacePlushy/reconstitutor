@@ -36,9 +36,9 @@ Deploying or linking Vercel, CI workflows, new calculator features, saving anyth
 
 ## What carries over unchanged
 
-From the 2026-09-26 spec, these sections still apply word for word: **Domain rules**, **Tab 1: Mix a vial**, **Tab 2: Draw a dose**, **Shared behaviour**, **Number formatting**, the **Syringe drawing** rules and the **Accessibility** requirements.
+From the 2026-09-26 spec, these still apply word for word: **Domain rules**, **Tab 1: Mix a vial**, **Tab 2: Draw a dose**, **Shared behaviour**, **Number formatting**, and the **Syringe drawing** subsection of Visual design. **Accessibility** also applies, except that the mode switch is a tablist rather than a radio group (see Accessibility below).
 
-Its **Visual design** (colour tokens, type, layout sizes) and **Architecture** sections are replaced by this document. The 2026-09-26 spec gets a note at the top saying so, and its "opens from disk" success criterion is marked as superseded.
+The rest of its **Visual design** section (concept, colour tokens, type, layout sizes, rules) and its **Architecture** section are replaced by this document. The 2026-09-26 spec gets a note at the top saying so, and its "opens from disk" success criterion is marked as superseded.
 
 ## Stack and tooling
 
@@ -98,6 +98,7 @@ reconstitutor/
     ├── calc.test.ts
     ├── syringe.test.ts
     ├── text.test.ts
+    ├── SyringeDiagram.test.tsx
     └── App.test.tsx
 ```
 
@@ -154,7 +155,7 @@ Reset rules, as in `app.js`:
 - Switching mode leaves it alone.
 - Vial, dose and syringe are shared between tabs; water is only shown in Draw but its text is kept.
 
-The page renders one workspace whose contents depend on `mode`. `ModeTabs` wraps it with shadcn Tabs: each tab's panel renders the same workspace for its mode, so switching tabs remounts the panel but loses nothing, because all values live in `App`.
+The page renders one workspace whose contents depend on `mode`. `ModeTabs` wraps it with shadcn Tabs using a single panel (`<TabsContent value={mode}>`), so switching tabs changes the panel's contents without unmounting it. The syringe stays mounted, and all values live in `App`.
 
 ## Components
 
@@ -224,7 +225,7 @@ The detailed visual work is done with the frontend-design skill during implement
 
 All tests run with `vitest run`. Math tests use the Node environment; `App.test.tsx` uses jsdom.
 
-1. **`calc.test.ts`**: `calc.test.js` ported. `require` becomes `import`, `node:test`'s `test` becomes Vitest's, and assertions keep using `node:assert/strict`, so every assertion keeps its exact meaning. No test is removed or loosened.
+1. **`calc.test.ts`**: `calc.test.js` ported. `require` becomes `import`, `node:test`'s `test` becomes Vitest's, and assertions keep using `node:assert/strict`, so every assertion keeps its exact meaning. No test is removed or loosened. The `renderSyringe` markup assertions (fill scale, plunger offset, draw label, `data-syringe`) move to a `SyringeDiagram` component test.
 2. **`syringe.test.ts`**: `unitToY`, `syringePosition` and `describeSyringe` tests ported as-is. The two `renderSyringe` markup tests become `scaleMarks` tests: 31/51/51 ticks and 7/11/11 major ticks for the 0.3/0.5/1 mL syringes, with the expected `y` at 0 and at capacity.
 3. **`text.test.ts`**: `glueUnits` (glues units, mg/mL, mL and mg, treating "5 mg/mL" as one unit; leaves a unit that runs into another word unglued) and `splitFigure` (number + unit, and `null` for "less than 0.1 units").
 4. **`App.test.tsx`**, through the rendered page:

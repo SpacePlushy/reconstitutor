@@ -1,7 +1,7 @@
 # Retatrutide reconstitution calculator — design
 
 Date: 2026-09-26
-Status: implemented. Its **Visual design** and **Architecture** sections are superseded by [2026-09-27-react-typescript-migration-design.md](2026-09-27-react-typescript-migration-design.md); everything else still applies.
+Status: implemented. Its **Architecture** section and its **Visual design** section, except the **Syringe drawing** subsection, are superseded by [2026-09-27-react-typescript-migration-design.md](2026-09-27-react-typescript-migration-design.md). In **Accessibility**, the mode switch is now a tablist. Everything else still applies.
 
 ## Purpose
 
@@ -140,6 +140,7 @@ Warnings and errors:
 - Vial, dose and syringe values are shared between the tabs. Switching tabs keeps them.
 - Results update as you type. There is no submit button.
 - Input accepts `.` or `,` as the decimal separator. Fields use `inputmode="decimal"`.
+- A comma followed by exactly three digits after a 1–3 digit whole number, such as `1,000` or `2,500`, is rejected as ambiguous: it could be a thousands separator, and guessing wrong is a 1000× dosing error. `2,5` and `0,125` are still decimals.
 - A field shows its error only for text that can't become a number. Text such as `0` or `0.`, typed on the way to `0.5`, shows no error.
 - Nothing is stored. Reloading the page clears it.
 - One quiet footer line: "This does arithmetic only. Check your numbers with your prescriber or pharmacist."
