@@ -1,0 +1,407 @@
+/* Tokens ------------------------------------------------------------------ */
+
+:root {
+  --paper: #FBFCFC;
+  --ink: #1E2B33;
+  --muted: #5E6E78;
+  --cap-orange: #F25C05;
+  --solution: #D6E9F2;
+  --stopper: #2B2F33;
+  --caution: #B3261E;
+  --barrel: #FFFFFF;
+  --rod: #C9D2D8;
+  --rule: #D5DDE2;
+  --selected: #EEF4F7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #151C21;
+    --ink: #E3EAEE;
+    --muted: #9AA8B1;
+    --cap-orange: #FF7A2E;
+    --solution: #2A4A5A;
+    --stopper: #AEB8BF;
+    --caution: #FF8A80;
+    --barrel: #1C252B;
+    --rod: #4A5963;
+    --rule: #33424C;
+    --selected: #1F2A31;
+  }
+}
+
+/* Base -------------------------------------------------------------------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  color-scheme: light dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inputs must inherit 17px: iOS Safari zooms into any field under 16px. */
+input { font: inherit; color: inherit; }
+
+[hidden] { display: none !important; }
+
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+legend { padding: 0; }
+
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Page -------------------------------------------------------------------- */
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 24px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+/* Segmented radio controls (mode and syringe) */
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+}
+
+.segmented label { position: relative; }
+
+.segmented input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segmented span {
+  display: block;
+  padding: 5px 13px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.segmented input:checked + span {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.segmented input:focus-visible + span {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* The syringe picker shares its column's width, so it can't run into the syringe. */
+.field .segmented {
+  display: flex;
+  max-width: 18em;
+}
+
+.field .segmented label {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.field .segmented span {
+  padding-right: 4px;
+  padding-left: 4px;
+  text-align: center;
+}
+
+/* Inputs and the syringe, side by side */
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 16px;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.field label,
+.field legend {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.amount {
+  display: flex;
+  align-items: baseline;
+  max-width: 10em;
+  border-bottom: 2px solid var(--ink);
+}
+
+.amount:focus-within { box-shadow: 0 2px 0 var(--ink); }
+
+.amount:has(input[aria-invalid="true"]) { border-bottom-color: var(--caution); }
+
+.amount input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  font-size: 27px;
+  font-weight: 600;
+  outline: none;
+}
+
+.amount-unit {
+  padding-left: 6px;
+  color: var(--muted);
+}
+
+.field-error {
+  margin: 6px 0 0;
+  color: var(--caution);
+  font-size: 14px;
+}
+
+/* The answer */
+
+.answer {
+  padding-top: 16px;
+  border-top: 1.5px solid var(--ink);
+}
+
+.answer-main {
+  margin: 0 0 10px;
+  line-height: 1.1;
+}
+
+.answer-verb,
+.answer-tail {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.answer-number {
+  font-size: 54px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.answer-unit {
+  font-size: 27px;
+  font-weight: 700;
+}
+
+.answer-detail { margin: 4px 0 0; }
+
+.answer-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.notices {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notice {
+  padding: 2px 0 2px 12px;
+  border-left: 4px solid var(--caution);
+}
+
+/* The syringe */
+
+.syringe { margin: 0; }
+
+/* The column width sets the syringe's size; its viewBox sets the height. */
+.syringe-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 640px;
+}
+
+.syringe figcaption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.syr-needle { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.syr-hub { fill: var(--muted); }
+.syr-barrel { fill: var(--barrel); stroke: var(--ink); stroke-width: 1.5; }
+.syr-rod { fill: var(--rod); }
+.syr-fill { fill: var(--solution); transform-box: fill-box; transform-origin: top; }
+.syr-stopper { fill: var(--stopper); }
+.syr-tick { stroke: var(--ink); stroke-width: 1; }
+.syr-tick-major { stroke-width: 1.5; }
+.syr-label { fill: var(--ink); font-size: 12px; font-weight: 600; }
+.syr-drawline { stroke: var(--cap-orange); stroke-width: 3; stroke-linecap: round; }
+.syr-drawlabel { fill: var(--ink); font-size: 13px; font-weight: 700; text-anchor: end; }
+.syr-overflow { stroke: var(--caution); stroke-width: 3; stroke-dasharray: 4 3; }
+.syr-flange, .syr-thumb { fill: var(--ink); }
+
+.syr:not([data-state="ok"]) .syr-draw,
+.syr:not([data-state="overflow"]) .syr-overflow { display: none; }
+
+.syr-fill,
+.syr-moving { transition: transform 250ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .syr-fill,
+  .syr-moving { transition: none; }
+}
+
+/* Water options table */
+
+.options {
+  margin-top: 32px;
+  overflow-x: auto;
+}
+
+.options-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.options-table th {
+  padding: 0 8px 8px 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.options-table td {
+  padding: 10px 8px 10px 0;
+  border-top: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+.options-table th:first-child,
+.options-table td:first-child { padding-left: 12px; }
+
+.option { cursor: pointer; }
+.option.is-selected td { background: var(--selected); }
+.option.is-selected td:first-child { box-shadow: inset 4px 0 0 var(--ink); }
+.option.is-flagged td:not(:first-child) { color: var(--muted); }
+.option:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: -2px; }
+
+.option-water label {
+  display: block;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.option-water input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.option-status {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.option-status.is-recommended {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* On phones the answer already shows the strength, so the table drops that column. */
+@media (max-width: 480px) {
+  .options-table th:nth-child(2),
+  .options-table td:nth-child(2) { display: none; }
+}
+
+/* The narrowest phones: a slimmer syringe column and smaller picker labels. */
+@media (max-width: 340px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 88px;
+    gap: 12px;
+  }
+  .field .segmented span { font-size: 15px; }
+}
+
+/* Worked math */
+
+.math { margin-top: 32px; }
+
+.math h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.math-steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footnote {
+  max-width: 40em;
+  margin-top: 40px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Wider screens: same layout, bigger syringe */
+
+@media (min-width: 640px) {
+  .app { padding-top: 40px; }
+  h1 { font-size: 27px; }
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 160px;
+    gap: 40px;
+  }
+}

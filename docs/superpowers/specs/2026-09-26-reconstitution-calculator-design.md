@@ -1,7 +1,7 @@
 # Retatrutide reconstitution calculator — design
 
 Date: 2026-09-26
-Status: approved in conversation, awaiting written-spec review
+Status: implemented. Its **Architecture** section and its **Visual design** section, except the **Syringe drawing** subsection, are superseded by [2026-09-27-react-typescript-migration-design.md](2026-09-27-react-typescript-migration-design.md). In **Accessibility**, the mode switch is now a tablist. Everything else still applies.
 
 ## Purpose
 
@@ -31,7 +31,7 @@ Assumptions (confirmed during design review):
 - Entering vial mg, dose mg and syringe gives a recommended water amount, how to measure it, and where the dose will sit on the syringe.
 - Every number shown matches the formulas below, confirmed by automated tests.
 - Mistakes that cause bad doses (dose bigger than vial, dose too big for syringe, dose too small to measure, dose between marks) produce a plain-language warning with a next step.
-- Opening `index.html` directly from disk works with no server and no install.
+- ~~Opening `index.html` directly from disk works with no server and no install.~~ Superseded by the React + TypeScript rebuild.
 
 ## Out of scope
 
@@ -140,6 +140,8 @@ Warnings and errors:
 - Vial, dose and syringe values are shared between the tabs. Switching tabs keeps them.
 - Results update as you type. There is no submit button.
 - Input accepts `.` or `,` as the decimal separator. Fields use `inputmode="decimal"`.
+- A comma followed by exactly three digits after a 1–3 digit whole number, such as `1,000` or `2,500`, is rejected as ambiguous: it could be a thousands separator, and guessing wrong is a 1000× dosing error. `2,5` and `0,125` are still decimals.
+- A field shows its error only for text that can't become a number. Text such as `0` or `0.`, typed on the way to `0.5`, shows no error.
 - Nothing is stored. Reloading the page clears it.
 - One quiet footer line: "This does arithmetic only. Check your numbers with your prescriber or pharmacist."
 
@@ -147,8 +149,9 @@ Warnings and errors:
 
 - Every number shows its unit, and decimals always have a leading zero.
 - Water amounts: at least 1 decimal, up to 2, so a typed 1.25 mL isn't shown rounded (`1.0 mL`, `2.4 mL`, `1.25 mL`).
-- Draw volume: 2 decimals, or 3 when needed, so it always agrees with the units (`0.40 mL`, `0.395 mL`).
-- Units: up to 1 decimal, trailing `.0` removed (`40 units`, `22.5 units`, `1 unit`). A dose that would round to 0 shows as `less than 0.1 units`.
+- Draw volume: 2 decimals, or more when needed, so it always agrees with the units (`0.40 mL`, `0.395 mL`, `0.1995 mL`). A real volume that would round to 0 shows as `less than 0.001 mL`.
+- Units: up to 1 decimal, trailing `.0` removed (`40 units`, `22.5 units`, `1 unit`). If 1 decimal would show a dose that isn't on a mark as a whole number, up to 3 decimals are shown, so 26.04 units never reads as the 26 mark (`26.04 units`, `19.95 units`). A dose that would round to 0 shows as `less than 0.1 units`, and as `<0.1` on the syringe label.
+- A number and its unit never wrap onto separate lines.
 - Concentration: up to 2 decimals, trailing zeros removed (`5 mg/mL`, `6.67 mg/mL`).
 - mg: up to 3 decimals, trailing zeros removed (`2 mg`, `0.25 mg`, `1.9 mg`).
 - Percent: whole number (`5% under`, `3% over`).
@@ -179,7 +182,7 @@ Water    Strength    Dose       1 mg =
 3.0 mL   3.33 mg/mL  60 units   30 units
 ```
 
-Single column, left-aligned. On wider screens the same layout scales up inside a centred column.
+Single column, left-aligned. On wider screens the same layout scales up inside a centred column. The syringe picker shares its column's width (up to 18em), so it never runs into the syringe. At 340px and narrower, the syringe column shrinks to 88px and the picker labels to 15px.
 
 ### Colour tokens
 
