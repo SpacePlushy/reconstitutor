@@ -36,6 +36,23 @@ jobs:
       CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
 
     steps:
+      # The review only posts once it's finished, so this comment shows it's
+      # under way. It uses the workflow's own token (Claude's app token only
+      # exists inside the review step), so it appears as github-actions[bot].
+      # The last step edits it to show how the review ended.
+      - name: Post progress comment
+        id: progress
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --jq .id \
+            -f body="⏳ **Claude is reviewing this pull request.** Findings will appear as inline comments and a summary when it's done. [Follow the run]($RUN_URL)")
+          echo "comment_id=$id" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
@@ -92,3 +109,33 @@ jobs:
                 | if length == 0 then empty else tally end),
               "Calls that returned an error (includes denials):", ($errors | tally)
           ' "$EXECUTION_FILE"
+
+      - name: Update progress comment
+        if: always() && steps.progress.outputs.comment_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMENT_ID: ${{ steps.progress.outputs.comment_id }}
+          STARTED: ${{ steps.progress.outputs.started }}
+          OUTCOME: ${{ steps.review.outcome }}
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        run: |
+          elapsed=$(( $(date -u +%s) - $(date -u -d "$STARTED" +%s) ))
+          took="$((elapsed / 60))m $((elapsed % 60))s"
+          # The review's summary is the claude[bot] comment it posted during this run.
+          summary_url=$(gh api --paginate "repos/$REPO/issues/$PR/comments?since=$STARTED" |
+            jq -rs --arg since "$STARTED" '[.[][] | select(.user.login == "claude[bot]" and (.body | startswith("## Claude review")) and .created_at >= $since)] | last | .html_url // empty')
+          if [ "$OUTCOME" = "cancelled" ]; then
+            body="⏹️ **Claude's review was cancelled** after $took. [View the run]($RUN_URL)"
+          elif [ "$OUTCOME" = "failure" ] || [ "$OUTCOME" = "skipped" ]; then
+            body="❌ **Claude's review failed** after $took. [View the run]($RUN_URL)"
+          elif [ -z "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
+            body="⏭️ **Claude didn't review this pull request.** It changes a Claude workflow file, and those changes only take effect after merging. [View the run]($RUN_URL)"
+          elif [ -n "$summary_url" ]; then
+            body="✅ **Claude finished reviewing** in $took. [Read the summary]($summary_url); findings are also inline on the changed lines."
+          else
+            body="⚠️ **Claude's review ended without posting a summary** after $took. [View the run]($RUN_URL)"
+          fi
+          gh api -X PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -f body="$body" --silent
