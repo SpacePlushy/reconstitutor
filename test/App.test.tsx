@@ -59,6 +59,14 @@ test("half-typed numbers stay calm; text that can't be a number shows an error",
   expect(vial).toHaveAccessibleDescription("Enter the vial amount in mg.");
 });
 
+test("tabbing past the mode tabs goes straight to the vial field", async () => {
+  const { user } = setup();
+  await user.tab();
+  expect(screen.getByRole("tab", { name: "Mix a vial" })).toHaveFocus();
+  await user.tab();
+  expect(screen.getByLabelText("Vial")).toHaveFocus();
+});
+
 test("pressing the chosen syringe again keeps it chosen", async () => {
   const { user } = setup();
   const oneMl = screen.getByRole("radio", { name: "1 mL" });

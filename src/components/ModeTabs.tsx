@@ -40,7 +40,9 @@ export function ModeTabs({ mode, onModeChange, children }: ModeTabsProps) {
           </TabsTrigger>
         </TabsList>
       </header>
-      <TabsContent value={mode} className="text-base">
+      {/* The panel starts with the Vial field, so it needs no tab stop of its own;
+          Radix's default one would be an invisible stop between the tabs and the field. */}
+      <TabsContent value={mode} tabIndex={-1} className="text-base">
         {children}
       </TabsContent>
     </Tabs>
