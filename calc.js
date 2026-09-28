@@ -47,6 +47,8 @@
 
   function parseAmount(text) {
     if (typeof text !== "string") return null;
+    // "1,000" could mean 1 or 1000; guessing wrong is a 1000x dosing error.
+    if (/^[1-9]\d{0,2},\d{3}$/.test(text.trim())) return null;
     const cleaned = text.trim().replace(",", ".");
     if (!/^(\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
     const value = Number(cleaned);
@@ -82,16 +84,17 @@
     return `${decimals(ml, 1, 2)} mL`;
   }
 
-  // Units as a bare number: 1 decimal, or up to 3 when 1 decimal would show an
-  // off-mark dose as a whole number (26.04 must not read as the 26 mark).
+  // Units as a bare number: 1 decimal, or up to 6 when fewer would show an
+  // off-mark dose as a whole number (26.04 must not read as the 26 mark). Six
+  // decimals reaches EPS, so anything further off a mark always shows as off it.
   // null means a real dose too small to show.
   function unitsNumber(units) {
     if (units > 0 && roundTo(units, 1) === 0) return null;
-    for (const places of [1, 2, 3]) {
+    for (const places of [1, 2, 3, 4, 5, 6]) {
       const text = decimals(units, 0, places);
       if (text.includes(".") || Math.abs(units - Number(text)) <= EPS) return text;
     }
-    return decimals(units, 0, 3);
+    return decimals(units, 0, 6);
   }
 
   function formatUnitsNumber(units) {

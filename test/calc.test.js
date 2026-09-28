@@ -33,6 +33,15 @@ test("parseAmount rejects empty, zero, negative and non-numeric input", () => {
   assert.equal(Calc.parseAmount(undefined), null);
 });
 
+test("parseAmount rejects a comma that reads as a thousands separator", () => {
+  for (const text of ["1,000", "2,500", "12,500", "100,000"]) {
+    assert.equal(Calc.parseAmount(text), null, JSON.stringify(text));
+  }
+  assert.equal(Calc.parseAmount("0,125"), 0.125);
+  assert.equal(Calc.parseAmount("10,25"), 10.25);
+  assert.equal(Calc.parseAmount("1,0005"), 1.0005);
+});
+
 test("formatMg shows up to 3 decimals", () => {
   assert.equal(Calc.formatMg(2), "2 mg");
   assert.equal(Calc.formatMg(0.25), "0.25 mg");
@@ -342,6 +351,14 @@ test("formatUnits adds decimals instead of rounding an off-mark dose to a whole 
   assert.equal(Calc.formatUnits(20.004), "20.004 units");
   assert.equal(Calc.formatUnits(20.8333), "20.8 units");
   assert.equal(Calc.formatUnits(30.000000000000004), "30 units");
+});
+
+test("formatUnits never shows an off-mark dose as a whole mark, however close it is", () => {
+  assert.equal(Calc.formatUnits(20.0002), "20.0002 units");
+  assert.equal(Calc.formatUnitsNumber(26.00004), "26.00004");
+  assert.equal(Calc.formatMl(0.200002), "0.200002 mL");
+  // Within EPS of the mark counts as on it.
+  assert.equal(Calc.formatUnits(20.0000004), "20 units");
 });
 
 test("formatUnitsNumber gives the bare number for labels", () => {
