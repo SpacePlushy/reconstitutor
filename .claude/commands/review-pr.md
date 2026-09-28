@@ -7,7 +7,7 @@ Review the pull request identified in: $ARGUMENTS
 
 1. **Read the pull request.** Run `gh pr view <PR_NUMBER> --repo <REPO>` for the title and description, and `gh pr diff <PR_NUMBER> --repo <REPO>` for the changes. Run each as a plain command: no pipes, redirects, heredocs or command substitution, which the permission rules deny. The repository is checked out in the working directory, so read full files there when the diff needs more context.
 
-2. **Run the specialists.** In one message, launch these five agents with `run_in_background` set to false, so they run in parallel and you wait for all of them:
+2. **Run the specialists.** Launch these five agents in one message, so they run in parallel, and wait for all five answers before going on:
    - `code-quality-reviewer`
    - `performance-reviewer`
    - `test-coverage-reviewer`

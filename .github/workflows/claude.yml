@@ -31,6 +31,9 @@ jobs:
       ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-5-5
       ANTHROPIC_DEFAULT_SONNET_MODEL: claude-opus-5-5
       ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-opus-5-5
+      # A one-shot CI run ends when Claude's turn ends, killing anything still
+      # running in the background. This makes every agent run in the foreground.
+      CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
 
     steps:
       - name: Checkout repository
@@ -46,8 +49,8 @@ jobs:
           additional_permissions: |
             actions: read
           # Same one-shot safeguards as the review workflow: nothing can resume
-          # after the run ends, so work must finish in the foreground.
+          # after the run ends.
           claude_args: |
             --model claude-opus-5-5
             --disallowedTools "ScheduleWakeup,SendMessage,Monitor"
-            --append-system-prompt "This is a one-shot CI run: ending your turn exits the process and kills any background work, and nothing will wake you later. Launch every subagent with run_in_background set to false, and do not end your turn until your reply or your changes have been posted."
+            --append-system-prompt "This is a one-shot CI run: ending your turn ends the process, and nothing will resume it later. Do not end your turn until your reply or your changes have been posted."
