@@ -37,9 +37,11 @@ jobs:
 
     steps:
       # The review only posts once it's finished, so this comment shows it's
-      # under way. It uses the workflow's own token (Claude's app token only
-      # exists inside the review step), so it appears as github-actions[bot].
-      # The last step edits it to show how the review ended.
+      # under way, and the last step edits it to show how the review ended.
+      # Both steps post as claude[bot] by fetching Claude's GitHub App token
+      # the same way claude-code-action does, then revoking it. The exchange
+      # refuses when this workflow differs from main (and could change without
+      # notice), so they fall back to the workflow's token: github-actions[bot].
       - name: Post progress comment
         id: progress
         env:
@@ -48,10 +50,24 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          claude_token() {
+            local oidc
+            oidc=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=claude-code-github-action" | jq -r '.value // empty') || return 1
+            [ -n "$oidc" ] || return 1
+            curl -sSf -X POST -H "Authorization: Bearer $oidc" \
+              https://api.anthropic.com/api/github/github-app-token-exchange | jq -r '.token // .app_token // empty'
+          }
+          token=$(claude_token 2>/dev/null) || token=""
+          if [ -n "$token" ]; then echo "::add-mask::$token"; export GH_TOKEN="$token"; fi
           echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           id=$(gh api "repos/$REPO/issues/$PR/comments" --jq .id \
             -f body="⏳ **Claude is reviewing this pull request.** Findings will appear as inline comments and a summary when it's done. [Follow the run]($RUN_URL)")
           echo "comment_id=$id" >> "$GITHUB_OUTPUT"
+          if [ -n "$token" ]; then
+            curl -sS -X DELETE -H "Authorization: Bearer $token" -H "Accept: application/vnd.github+json" \
+              https://api.github.com/installation/token > /dev/null || true
+          fi
 
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -122,6 +138,17 @@ jobs:
           OUTCOME: ${{ steps.review.outcome }}
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
         run: |
+          # Same token handling as "Post progress comment" above.
+          claude_token() {
+            local oidc
+            oidc=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=claude-code-github-action" | jq -r '.value // empty') || return 1
+            [ -n "$oidc" ] || return 1
+            curl -sSf -X POST -H "Authorization: Bearer $oidc" \
+              https://api.anthropic.com/api/github/github-app-token-exchange | jq -r '.token // .app_token // empty'
+          }
+          token=$(claude_token 2>/dev/null) || token=""
+          if [ -n "$token" ]; then echo "::add-mask::$token"; export GH_TOKEN="$token"; fi
           elapsed=$(( $(date -u +%s) - $(date -u -d "$STARTED" +%s) ))
           took="$((elapsed / 60))m $((elapsed % 60))s"
           # The review's summary is the claude[bot] comment it posted during this run.
@@ -139,3 +166,7 @@ jobs:
             body="⚠️ **Claude's review ended without posting a summary** after $took. [View the run]($RUN_URL)"
           fi
           gh api -X PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -f body="$body" --silent
+          if [ -n "$token" ]; then
+            curl -sS -X DELETE -H "Authorization: Bearer $token" -H "Accept: application/vnd.github+json" \
+              https://api.github.com/installation/token > /dev/null || true
+          fi
