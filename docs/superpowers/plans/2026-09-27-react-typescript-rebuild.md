@@ -98,6 +98,7 @@ Move the old app aside, set up Vite/React/TypeScript/Tailwind/Vitest/ESLint/Pret
 
 **Files:**
 - Move: `index.html`, `app.js`, `calc.js`, `syringe.js`, `styles.css` → `legacy/`; `test/calc.test.js`, `test/syringe.test.js` → `legacy/test/`
+- Create: `legacy/package.json` (keeps the old CommonJS tests runnable)
 - Create: `package.json`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `tsconfig.test.json`, `vite.config.ts`, `eslint.config.js`, `.prettierrc`, `.prettierignore`, `index.html`, `src/main.tsx`, `src/App.tsx`, `src/index.css`, `src/lib/calc.ts`, `test/setup.ts`, `test/calc.test.ts`
 - Modify: `.gitignore`, `.claude/launch.json`
 
@@ -111,10 +112,13 @@ Move the old app aside, set up Vite/React/TypeScript/Tailwind/Vitest/ESLint/Pret
 mkdir -p legacy/test
 git mv index.html app.js calc.js syringe.js styles.css legacy/
 git mv test/calc.test.js test/syringe.test.js legacy/test/
+# The old tests use require(). This keeps them runnable after Step 2's root
+# package.json sets "type": "module", so Task 6 can re-run them before deleting legacy/.
+printf '{ "type": "commonjs" }\n' > legacy/package.json
 node --test legacy/test/*.test.js
 ```
 
-Expected: `ℹ tests 52`, `ℹ pass 52`, `ℹ fail 0` (45 calc + 7 syringe tests; the relative `require("../calc.js")` paths still resolve). Pass the files, not the directory: `node --test legacy/test/` fails on Node 24.
+Expected: `ℹ tests 54`, `ℹ pass 54`, `ℹ fail 0` (47 calc + 7 syringe tests; the relative `require("../calc.js")` paths still resolve). Pass the files, not the directory: `node --test legacy/test/` fails on Node 24.
 
 - [ ] **Step 2: Write `package.json`**
 
@@ -337,6 +341,8 @@ package-lock.json
 legacy
 docs
 .superpowers
+.github
+.claude
 ```
 
 - [ ] **Step 7: Update `.gitignore` and the launch config**
@@ -436,7 +442,7 @@ afterEach(() => {
 
 - [ ] **Step 10: Write the failing calc test**
 
-`test/calc.test.ts` is `legacy/test/calc.test.js` ported. The only changes: `import` instead of `require`, Vitest's `test`, typed helpers, `assert.ok(x)` before reading a value that may be `null`/`undefined` (Node's `assert.ok` narrows the type), and `?.` on array elements. Assertions keep using `node:assert/strict`, so each one means exactly what it did. There are 45 tests and 178 value assertions, the same as the original.
+`test/calc.test.ts` is `legacy/test/calc.test.js` ported. The only changes: `import` instead of `require`, Vitest's `test`, typed helpers, `assert.ok(x)` before reading a value that may be `null`/`undefined` (Node's `assert.ok` narrows the type), and `?.` on array elements. Assertions keep using `node:assert/strict`, so each one means exactly what it did. There are 47 tests and 186 value assertions, the same as the original.
 
 ```ts
 import assert from "node:assert/strict";
@@ -496,6 +502,15 @@ test("parseAmount rejects empty, zero, negative and non-numeric input", () => {
     assert.equal(Calc.parseAmount(text), null, JSON.stringify(text));
   }
   assert.equal(Calc.parseAmount(undefined), null);
+});
+
+test("parseAmount rejects a comma that reads as a thousands separator", () => {
+  for (const text of ["1,000", "2,500", "12,500", "100,000"]) {
+    assert.equal(Calc.parseAmount(text), null, JSON.stringify(text));
+  }
+  assert.equal(Calc.parseAmount("0,125"), 0.125);
+  assert.equal(Calc.parseAmount("10,25"), 10.25);
+  assert.equal(Calc.parseAmount("1,0005"), 1.0005);
 });
 
 test("formatMg shows up to 3 decimals", () => {
@@ -871,6 +886,14 @@ test("formatUnits adds decimals instead of rounding an off-mark dose to a whole 
   assert.equal(Calc.formatUnits(30.000000000000004), "30 units");
 });
 
+test("formatUnits never shows an off-mark dose as a whole mark, however close it is", () => {
+  assert.equal(Calc.formatUnits(20.0002), "20.0002 units");
+  assert.equal(Calc.formatUnitsNumber(26.00004), "26.00004");
+  assert.equal(Calc.formatMl(0.200002), "0.200002 mL");
+  // Within EPS of the mark counts as on it.
+  assert.equal(Calc.formatUnits(20.0000004), "20 units");
+});
+
 test("formatUnitsNumber gives the bare number for labels", () => {
   assert.equal(Calc.formatUnitsNumber(40), "40");
   assert.equal(Calc.formatUnitsNumber(19.95), "19.95");
@@ -1100,6 +1123,8 @@ function decimals(value: number, min: number, max: number): string {
 
 export function parseAmount(text: string | undefined): number | null {
   if (typeof text !== "string") return null;
+  // "1,000" could mean 1 or 1000; guessing wrong is a 1000x dosing error.
+  if (/^[1-9]\d{0,2},\d{3}$/.test(text.trim())) return null;
   const cleaned = text.trim().replace(",", ".");
   if (!/^(\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
   const value = Number(cleaned);
@@ -1135,16 +1160,17 @@ export function formatWaterMl(ml: number): string {
   return `${decimals(ml, 1, 2)} mL`;
 }
 
-// Units as a bare number: 1 decimal, or up to 3 when 1 decimal would show an
-// off-mark dose as a whole number (26.04 must not read as the 26 mark).
+// Units as a bare number: 1 decimal, or up to 6 when fewer would show an
+// off-mark dose as a whole number (26.04 must not read as the 26 mark). Six
+// decimals reaches EPS, so anything further off a mark always shows as off it.
 // null means a real dose too small to show.
 function unitsNumber(units: number): string | null {
   if (units > 0 && roundTo(units, 1) === 0) return null;
-  for (const places of [1, 2, 3]) {
+  for (const places of [1, 2, 3, 4, 5, 6]) {
     const text = decimals(units, 0, places);
     if (text.includes(".") || Math.abs(units - Number(text)) <= EPS) return text;
   }
-  return decimals(units, 0, 3);
+  return decimals(units, 0, 6);
 }
 
 export function formatUnitsNumber(units: number): string {
@@ -1448,7 +1474,7 @@ export function describeWaterMeasure(waterMl: number, syringe: SyringeKey): stri
 - [ ] **Step 13: Run the calc tests**
 
 Run: `npx vitest run test/calc.test.ts`
-Expected: PASS, `Tests  45 passed (45)`.
+Expected: PASS, `Tests  47 passed (47)`.
 
 - [ ] **Step 14: Format and run the whole check**
 
@@ -1457,7 +1483,7 @@ npm run format
 npm run check
 ```
 
-Expected: `tsc -b` silent, ESLint silent, `All matched files use Prettier code style!`, `Tests  45 passed (45)`, `✓ built in …`. If `npm run format` changed any file you wrote above, that's fine; commit the formatted version.
+Expected: `tsc -b` silent, ESLint silent, `All matched files use Prettier code style!`, `Tests  47 passed (47)`, `✓ built in …`. If `npm run format` changed any file you wrote above, that's fine; commit the formatted version.
 
 - [ ] **Step 15: Commit**
 
@@ -1485,7 +1511,7 @@ Port the geometry half of `syringe.js` (no SVG strings) and pull the two text he
 
 - [ ] **Step 1: Write the failing syringe test**
 
-`test/syringe.test.ts`: the `unitToY`, `syringePosition` and `describeSyringe` tests are ported unchanged from `legacy/test/syringe.test.js`. The two `renderSyringe` markup tests become `scaleMarks` tests, because markup now lives in a React component (Task 4). Tick counts are the same: 31/51/51 ticks and 7/11/11 labelled ticks.
+`test/syringe.test.ts`: the `unitToY`, `syringePosition` and `describeSyringe` tests are ported unchanged from `legacy/test/syringe.test.js`. The two `renderSyringe` markup tests become `scaleMarks` tests, because markup now lives in a React component. The markup checks themselves come back as a `SyringeDiagram` component test in Task 4. Tick counts are the same: 31/51/51 ticks and 7/11/11 labelled ticks.
 
 ```ts
 import assert from "node:assert/strict";
@@ -1704,7 +1730,7 @@ export function splitFigure(text: string): { number: string; unit: string } | nu
 - [ ] **Step 6: Run the tests**
 
 Run: `npx vitest run`
-Expected: PASS, `Test Files  3 passed (3)`, `Tests  56 passed (56)`.
+Expected: PASS, `Test Files  3 passed (3)`, `Tests  58 passed (58)`.
 
 - [ ] **Step 7: Check and commit**
 
@@ -1717,7 +1743,7 @@ git commit -m "Port syringe geometry and text helpers to TypeScript
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-Expected from `npm run check`: all silent/green, `Tests  56 passed (56)`.
+Expected from `npm run check`: all silent/green, `Tests  58 passed (58)`.
 
 ---
 
@@ -2145,7 +2171,6 @@ Colour values are the spec's starting tokens (all text passes WCAG AA in both th
 
 ```css
 @import "tailwindcss";
-@import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 /* Phones where the table drops its Strength column (the answer already shows it). */
@@ -2516,7 +2541,7 @@ export function App() {
 - [ ] **Step 10: Run the tests**
 
 Run: `npx vitest run`
-Expected: PASS, `Test Files  4 passed (4)`, `Tests  60 passed (60)`.
+Expected: PASS, `Test Files  4 passed (4)`, `Tests  62 passed (62)`.
 
 - [ ] **Step 11: Look at it**
 
@@ -2533,7 +2558,7 @@ git commit -m "Add clinical theme, shadcn primitives and the input controls
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-Expected from `npm run check`: all green, `Tests  60 passed (60)`.
+Expected from `npm run check`: all green, `Tests  62 passed (62)`.
 
 ---
 
@@ -2544,6 +2569,7 @@ Show the answer for both modes and draw the syringe. The water table and worked 
 **Files:**
 - Create: `src/components/Notices.tsx`, `src/components/AnswerCard.tsx`, `src/components/SyringeDiagram.tsx`
 - Modify: `src/index.css` (append syringe styles), `src/App.tsx` (replace), `test/App.test.tsx` (append tests)
+- Test: `test/SyringeDiagram.test.tsx` (new)
 
 **Interfaces:**
 - Consumes: `@/lib/calc` (formatters, `describeWaterMeasure`, response types), `@/lib/syringe` (geometry, `syringePosition`, `describeSyringe`, `scaleMarks`, `SyringeView`), `@/lib/text` (`glueUnits`, `splitFigure`).
@@ -2607,17 +2633,44 @@ test("the syringe keeps its drawing while the dose changes, and redraws for a ne
   await type("Vial", "10");
   await type("Your dose", "2");
   const drawing = syringe();
-  await type("Your dose", "5");
+  expect(drawing).toHaveAccessibleName("1 mL syringe drawn to 20 units");
+  await user.clear(screen.getByLabelText("Your dose"));
+  await type("Your dose", "3");
   expect(syringe()).toBe(drawing);
+  expect(drawing).toHaveAccessibleName("1 mL syringe drawn to 30 units");
   await user.click(screen.getByRole("radio", { name: "0.5 mL" }));
   expect(syringe()).not.toBe(drawing);
 });
 ```
 
+Then create `test/SyringeDiagram.test.tsx`. These are the markup checks from the old `renderSyringe` test (fill scale, plunger and draw-line offsets, label, `data-syringe`), now on the component, so no assertion is lost in the port:
+
+```tsx
+// @vitest-environment jsdom
+import { render, screen } from "@testing-library/react";
+import { expect, test } from "vitest";
+import { SyringeDiagram } from "@/components/SyringeDiagram";
+
+// The markup checks from the old renderSyringe test, on the React component.
+test("SyringeDiagram draws the fill, plunger, draw line and label at the dose", () => {
+  const { container } = render(<SyringeDiagram syringe="1" units={20} state="ok" />);
+  const svg = screen.getByRole("img", { name: "1 mL syringe drawn to 20 units" });
+  expect(svg).toHaveAttribute("data-syringe", "1");
+  expect(svg).toHaveAttribute("data-state", "ok");
+  expect(container.querySelector(".syr-fill")).toHaveStyle({ transform: "scaleY(0.2)" });
+  const moving = Array.from(container.querySelectorAll(".syr-moving"));
+  expect(moving).toHaveLength(2);
+  for (const group of moving) {
+    expect(group).toHaveStyle({ transform: "translateY(84px)" });
+  }
+  expect(container.querySelector(".syr-drawlabel")).toHaveTextContent("20");
+});
+```
+
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `npx vitest run test/App.test.tsx`
-Expected: FAIL, the 4 new tests, e.g. `Unable to find an accessible element with the role "region" and name "Answer"`. The 4 input tests still pass.
+Run: `npx vitest run test/App.test.tsx test/SyringeDiagram.test.tsx`
+Expected: FAIL. The 4 new App tests fail, e.g. `Unable to find an accessible element with the role "region" and name "Answer"`, and `SyringeDiagram.test.tsx` fails with `Failed to resolve import "@/components/SyringeDiagram"`. The 4 input tests still pass.
 
 - [ ] **Step 3: Append the syringe styles to `src/index.css`**
 
@@ -3109,7 +3162,7 @@ export function App() {
 - [ ] **Step 8: Run the tests**
 
 Run: `npx vitest run`
-Expected: PASS, `Tests  64 passed (64)`.
+Expected: PASS, `Test Files  5 passed (5)`, `Tests  67 passed (67)`.
 
 - [ ] **Step 9: Look at it**
 
@@ -3126,7 +3179,7 @@ git commit -m "Add the answer card and the syringe diagram
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-Expected from `npm run check`: all green, `Tests  64 passed (64)`.
+Expected from `npm run check`: all green, `Tests  67 passed (67)`.
 
 ---
 
@@ -3174,6 +3227,7 @@ test("mix: tapping anywhere on a row selects it", async () => {
   await type("Your dose", "2");
   await user.click(within(row("2.0 mL")).getByText("40 units"));
   expect(waterRadio("2.0 mL")).toBeChecked();
+  expect(waterRadio("2.0 mL")).toHaveFocus();
   expect(answer()).toHaveTextContent("Add 2.0 mL of bacteriostatic water");
   expect(answer()).toHaveTextContent("Your dose: 40 units.");
 });
@@ -3246,7 +3300,7 @@ test("draw: the worked math appears only once there is an answer", async () => {
 - [ ] **Step 3: Run them to see them fail**
 
 Run: `npx vitest run test/App.test.tsx`
-Expected: FAIL, the 7 new tests, e.g. `Unable to find an accessible element with the role "radio" and name "1.0 mL"`; the other 8 pass.
+Expected: FAIL, the 7 new tests, e.g. `Unable to find an accessible element with the role "radio" and name "1.0 mL"`; the other 8 App tests and the `SyringeDiagram` test pass.
 
 - [ ] **Step 4: Add the shadcn table primitive**
 
@@ -3343,7 +3397,7 @@ export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableC
 
 - [ ] **Step 5: Write `src/components/WaterOptionsTable.tsx`**
 
-The radio sits inside the Water cell's label, so its accessible name is the water amount and arrow keys move the choice. Clicking anywhere else on the row calls `onSelect` too (selecting the same row twice is harmless). The selected row gets `bg-muted` from shadcn's `data-[state=selected]` and a 3px `draw` bar on its left edge. The Strength column uses the `narrow:` variant from `index.css`.
+The radio sits inside the Water cell's label, so its accessible name is the water amount and arrow keys move the choice. Clicking anywhere else on the row calls `onSelect` too and moves focus to that row's radio, as `app.js` did, so arrow keys work straight after a tap (selecting the same row twice is harmless). The selected row gets `bg-muted` from shadcn's `data-[state=selected]` and a 3px `draw` bar on its left edge. The Strength column uses the `narrow:` variant from `index.css`.
 
 ```tsx
 import {
@@ -3420,8 +3474,10 @@ export function WaterOptionsTable({ rows, selectedWaterMl, onSelect }: WaterOpti
               <TableRow
                 key={row.waterMl}
                 data-state={selected ? "selected" : undefined}
-                onClick={() => {
+                onClick={(event) => {
                   onSelect(row.waterMl);
+                  // Like tapping the label: focus the radio so arrow keys work next.
+                  event.currentTarget.querySelector<HTMLInputElement>("input[name=water]")?.focus();
                 }}
                 className={cn(
                   "cursor-pointer has-[input:focus-visible]:outline-2 has-[input:focus-visible]:-outline-offset-2 has-[input:focus-visible]:outline-ring",
@@ -3643,7 +3699,7 @@ export function App() {
 - [ ] **Step 8: Run the tests**
 
 Run: `npx vitest run`
-Expected: PASS, `Test Files  4 passed (4)`, `Tests  71 passed (71)`.
+Expected: PASS, `Test Files  5 passed (5)`, `Tests  74 passed (74)`.
 
 - [ ] **Step 9: Check and commit**
 
@@ -3656,7 +3712,7 @@ git commit -m "Add the water options table and worked math
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-Expected from `npm run check`: all green, `Tests  71 passed (71)`.
+Expected from `npm run check`: all green, `Tests  74 passed (74)`.
 
 ---
 
@@ -3690,6 +3746,7 @@ In both apps, enter each case below and confirm the answer text, table rows/stat
 | Draw | 10 | 1 | 1.8 | 1 mL | Hard-to-measure warning (11%) |
 | Draw | 10 | 2 | 12 | 1 mL | "Your dose is more than the whole vial (10 mg)." |
 | Draw | 10 | 2 | 0.004 | 1 mL | "less than 0.1 units", syringe label `<0.1` |
+| Mix | 1,000 | | 2 | 1 mL | The vial field shows "Enter the vial amount in mg." and there's no answer: `1,000` is rejected as ambiguous |
 
 Any difference in numbers or wording is a bug in the port. Fix it with a failing test first.
 
@@ -3713,18 +3770,19 @@ Expected: `"0s"` (and `"0.25s"` without the emulation).
 
 - [ ] **Step 5: Fix what the review found**
 
-Make only the changes the review calls for, keeping the spec's constraints. After each change, run `npx vitest run` (expect 71 passing) and re-take the affected screenshot. If a colour token changes, re-check its contrast (text ≥ 4.5:1, `draw` ≥ 3:1 against the background).
+Make only the changes the review calls for, keeping the spec's constraints. After each change, run `npx vitest run` (expect 74 passing) and re-take the affected screenshot. If a colour token changes, re-check its contrast (text ≥ 4.5:1, `draw` ≥ 3:1 against the background).
 
 - [ ] **Step 6: Delete the old app and run the final check**
 
-Stop the dev server, then:
+Stop the dev server, then run the old tests one last time and delete the old app:
 
 ```bash
+node --test legacy/test/*.test.js
 git rm -r legacy
 npm run check
 ```
 
-Expected: all green, `Tests  71 passed (71)`, `✓ built in …`, and `dist/index.html` exists.
+Expected: the old tests print `ℹ pass 54` one last time, then `npm run check` is all green, with `Tests  74 passed (74)`, `✓ built in …`, and `dist/index.html` exists.
 
 - [ ] **Step 7: Commit**
 
